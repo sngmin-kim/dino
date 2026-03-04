@@ -1,4 +1,10 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
+
+interface LogEntry {
+  dir: '←' | '→'
+  json: string
+  t: string
+}
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const W = 480
@@ -317,6 +323,13 @@ export default function DinoGame() {
   const rafRef = useRef<number>(0)
   const keysRef = useRef({ duck: false, jumpPressed: false })
 
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  // setLogs는 stable ref이므로 useRef 초기화 시점에 안전하게 캡처됨
+  const addLogRef = useRef((dir: '←' | '→', data: unknown) => {
+    const t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    setLogs(prev => [{ dir, json: JSON.stringify(data), t }, ...prev].slice(0, 8))
+  })
+
   const initState = useCallback((): GameState => {
     const prev = stateRef.current
     return {
@@ -394,6 +407,7 @@ export default function DinoGame() {
   // postMessage 연동
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
+      addLogRef.current('←', e.data)
       if (e.data?.type === 'GAME_INIT' && typeof e.data.userId === 'string') {
         if (stateRef.current) stateRef.current.userId = e.data.userId
       }
@@ -467,7 +481,9 @@ export default function DinoGame() {
           s.running = false
           s.gameOver = true
           if (s.score > s.hiScore) s.hiScore = s.score
-          window.parent.postMessage({ type: 'GAME_SCORE', score: Math.floor(s.score) }, '*')
+          const payload = { type: 'GAME_SCORE', score: Math.floor(s.score) }
+          window.parent.postMessage(payload, '*')
+          addLogRef.current('→', payload)
         }
       }
       s.obstacles = s.obstacles.filter((o) => o.x > -100)
@@ -543,6 +559,24 @@ export default function DinoGame() {
   return (
     <div className="game-wrapper">
       <canvas ref={canvasRef} width={W} height={H} className="game-canvas" />
+
+      {/* postMessage 디버그 패널 */}
+      <div className="debug-panel">
+        <div className="debug-title">postMessage 디버그</div>
+        {logs.length === 0 ? (
+          <div className="debug-empty">이벤트 없음</div>
+        ) : (
+          logs.map((log, i) => (
+            <div key={i} className="debug-entry">
+              <span className={log.dir === '←' ? 'debug-recv' : 'debug-send'}>
+                {log.dir} {log.dir === '←' ? '수신' : '전송'}
+              </span>
+              <span className="debug-time">{log.t}</span>
+              <div className="debug-json">{log.json}</div>
+            </div>
+          ))
+        )}
+      </div>
       <div className="controls">
         <button
           className="btn-jump"
