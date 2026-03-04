@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { ArrowUp, ArrowDown } from 'lucide-react'
 
 interface LogEntry {
   dir: '←' | '→'
@@ -94,14 +95,13 @@ function drawDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) {
   ctx.fillStyle = col
 
   if (dino.ducking) {
-    // Simple flat crouching form
     const by = y + 20
-    ctx.fillRect(x + 2, by, 38, 12)           // flat body
-    ctx.fillRect(x + 26, by - 12, 18, 14)     // head to the right
+    ctx.fillRect(x + 2, by, 38, 12)
+    ctx.fillRect(x + 26, by - 12, 18, 14)
     ctx.fillStyle = bg
-    ctx.fillRect(x + 32, by - 10, 6, 6)       // eye white
+    ctx.fillRect(x + 32, by - 10, 6, 6)
     ctx.fillStyle = pupil
-    ctx.fillRect(x + 34, by - 9, 3, 3)        // pupil
+    ctx.fillRect(x + 34, by - 9, 3, 3)
     ctx.fillStyle = col
     if (dino.frame === 0) {
       ctx.fillRect(x + 6, by + 12, 10, 6)
@@ -113,23 +113,15 @@ function drawDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) {
     return
   }
 
-  // Standing dino — clean, simple blocks
-  // Tail
   ctx.fillRect(x, y + 22, 10, 8)
-  // Body
   ctx.fillRect(x + 8, y + 16, 34, 20)
-  // Neck
   ctx.fillRect(x + 30, y + 8, 14, 12)
-  // Head
   ctx.fillRect(x + 24, y, 22, 14)
-  // Eye white
   ctx.fillStyle = bg
   ctx.fillRect(x + 34, y + 2, 7, 7)
-  // Pupil
   ctx.fillStyle = pupil
   ctx.fillRect(x + 37, y + 3, 3, 3)
   ctx.fillStyle = col
-  // Legs
   if (!dino.onGround) {
     ctx.fillRect(x + 10, y + 36, 10, 8)
     ctx.fillRect(x + 26, y + 36, 10, 6)
@@ -148,10 +140,8 @@ function drawDeadDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) 
   const y = px(dino.y)
   const col = dark ? '#ccc' : '#535353'
   const bg = dark ? '#1a1a1a' : '#f7f7f7'
-  // Erase normal eye
   ctx.fillStyle = bg
   ctx.fillRect(x + 34, y + 2, 7, 7)
-  // Draw X eyes
   ctx.fillStyle = col
   ctx.fillRect(x + 34, y + 2, 2, 2)
   ctx.fillRect(x + 39, y + 2, 2, 2)
@@ -231,6 +221,16 @@ function drawStars(ctx: CanvasRenderingContext2D, stars: Star[]) {
   for (const s of stars) ctx.fillRect(px(s.x), px(s.y), s.size, s.size)
 }
 
+// 고정폭 숫자 렌더링
+function drawFixedNum(ctx: CanvasRenderingContext2D, num: number, cx: number, y: number) {
+  const str = String(Math.floor(num)).padStart(5, '0')
+  const cw = ctx.measureText('0').width
+  const startX = cx - (cw * str.length) / 2
+  for (let i = 0; i < str.length; i++) {
+    ctx.fillText(str[i], startX + i * cw, y)
+  }
+}
+
 function drawScore(
   ctx: CanvasRenderingContext2D,
   score: number,
@@ -244,21 +244,23 @@ function drawScore(
   const hiCol = dark ? '#777' : '#bbb'
   const mainCol = dark ? '#ccc' : '#535353'
 
-  ctx.textAlign = 'center'
-
-  // 최고 점수 (smaller, lighter)
+  // 최고 점수
   ctx.font = '33px Galmuri11'
+  ctx.textAlign = 'center'
   ctx.fillStyle = hiCol
   ctx.fillText('최고 점수', cx, topY)
   ctx.font = 'bold 45px Galmuri11'
-  ctx.fillText(String(Math.floor(hiScore)).padStart(5, '0'), cx, topY + 51)
+  ctx.fillStyle = hiCol
+  drawFixedNum(ctx, hiScore, cx, topY + 51)
 
-  // 현재 점수 (normal)
+  // 현재 점수
   ctx.font = '33px Galmuri11'
+  ctx.textAlign = 'center'
   ctx.fillStyle = mainCol
   ctx.fillText('현재 점수', cx, topY + 114)
   ctx.font = 'bold 60px Galmuri11'
-  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), cx, topY + 180)
+  ctx.fillStyle = mainCol
+  drawFixedNum(ctx, score, cx, topY + 180)
 }
 
 // ─── Collision ────────────────────────────────────────────────────────────────
@@ -332,6 +334,18 @@ export default function DinoGame() {
   const keysRef = useRef({ duck: false, jumpPressed: false })
 
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [isGameOver, setIsGameOver] = useState(false)
+  const [currentScore, setCurrentScore] = useState(0)
+  const [isDark, setIsDark] = useState(false)
+
+  // stable refs for setters so game loop can call them
+  const setIsGameOverRef = useRef(setIsGameOver)
+  const setCurrentScoreRef = useRef(setCurrentScore)
+  const setIsDarkRef = useRef(setIsDark)
+  setIsGameOverRef.current = setIsGameOver
+  setCurrentScoreRef.current = setCurrentScore
+  setIsDarkRef.current = setIsDark
+
   const addLogRef = useRef((dir: '←' | '→', data: unknown) => {
     const t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     setLogs(prev => [{ dir, json: JSON.stringify(data), t }, ...prev].slice(0, 8))
@@ -366,6 +380,7 @@ export default function DinoGame() {
     const s = stateRef.current
     if (!s) return
     if (s.gameOver) {
+      setIsGameOverRef.current(false)
       const next = initState()
       next.running = true
       next.started = true
@@ -447,21 +462,19 @@ export default function DinoGame() {
       s.score += s.scoreTick * 0.016
       s.scoreTick *= 0.98
 
-      // 100점마다 점수 깜빡임
       if (Math.floor(s.score) % 100 === 0 && Math.floor(s.score) > 0 && !s.flashScore) {
         s.flashScore = true
         s.flashTick = 30
       }
       if (s.flashTick > 0 && (--s.flashTick === 0)) s.flashScore = false
 
-      // 낮밤 전환
       s.nightProgress += 0.0005 * s.speed
       s.night = (Math.sin(s.nightProgress) + 1) / 2 > 0.5
+      setIsDarkRef.current(s.night)
 
       const { dino } = s
       dino.ducking = keysRef.current.duck && dino.onGround
 
-      // 물리
       if (!dino.onGround) {
         dino.vy += GRAVITY
         dino.y += dino.vy
@@ -472,13 +485,11 @@ export default function DinoGame() {
         }
       }
 
-      // 다리 애니메이션
       if (++dino.frameTick > 6) {
         dino.frameTick = 0
         dino.frame = dino.frame === 0 ? 1 : 0
       }
 
-      // 장애물 생성
       s.lastObstacleX -= s.speed
       if (s.lastObstacleX < s.nextObstacleDist) {
         s.obstacles.push(makeObstacle(s.score))
@@ -500,6 +511,8 @@ export default function DinoGame() {
           const payload = { type: 'GAME_SCORE', payload: { score: Math.floor(s.score) } }
           window.parent.postMessage(payload, '*')
           addLogRef.current('→', payload)
+          setIsGameOverRef.current(true)
+          setCurrentScoreRef.current(s.score)
         }
       }
       s.obstacles = s.obstacles.filter((o) => o.x > -100)
@@ -534,26 +547,16 @@ export default function DinoGame() {
       if (s.dino.dead) drawDeadDino(ctx, s.dino, dark)
       else drawDino(ctx, s.dino, dark)
 
-      drawScore(ctx, s.score, s.hiScore, s.flashScore && s.flashTick % 8 < 4, dark)
-
-      if (s.gameOver) {
-        const col = dark ? '#ccc' : '#535353'
-        const cx = W / 2
-        const midY = Math.round(GROUND_Y * 0.48)
-        ctx.fillStyle = col
-        ctx.font = 'bold 22px Galmuri11'
-        ctx.textAlign = 'center'
-        ctx.fillText('게임 오버', cx, midY)
-        ctx.font = '13px Galmuri11'
-        ctx.fillStyle = dark ? '#888' : '#999'
-        ctx.fillText('^ 버튼으로 다시시작', cx, midY + 26)
+      // 게임오버 시 점수 숨김 (HTML 오버레이로 대체)
+      if (!s.gameOver) {
+        drawScore(ctx, s.score, s.hiScore, s.flashScore && s.flashTick % 8 < 4, dark)
       }
 
       if (!s.started) {
         ctx.fillStyle = dark ? '#aaa' : '#757575'
         ctx.font = '42px Galmuri11'
         ctx.textAlign = 'center'
-        ctx.fillText('^ 버튼으로 시작', W / 2, GROUND_Y - 70)
+        ctx.fillText('↑ 버튼으로 시작', W / 2, GROUND_Y - 70)
       }
     }
 
@@ -568,10 +571,34 @@ export default function DinoGame() {
     return () => cancelAnimationFrame(rafRef.current)
   }, [initState])
 
+  const scoreStr = String(Math.floor(currentScore)).padStart(5, '0')
+  const scoreCol = isDark ? '#ccc' : '#535353'
+  const labelCol = isDark ? '#888' : '#999'
+
   return (
     <div className="game-wrapper">
       <div className="game-area">
         <canvas ref={canvasRef} className="game-canvas" />
+
+        {/* 게임오버 HTML 오버레이 */}
+        {isGameOver && (
+          <div className="gameover-overlay">
+            <div className="gameover-title" style={{ color: scoreCol }}>게임 오버</div>
+            <div className="gameover-score" style={{ color: scoreCol }}>
+              {scoreStr.split('').map((ch, i) => (
+                <span key={i} className="score-digit">{ch}</span>
+              ))}
+            </div>
+            <button
+              className="btn-jump gameover-restart-btn"
+              onPointerDown={doJump}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <ArrowUp size={80} strokeWidth={2.5} />
+            </button>
+            <div className="gameover-restart-label" style={{ color: labelCol }}>버튼으로 다시시작</div>
+          </div>
+        )}
 
         {/* postMessage 디버그 패널 */}
         <div className="debug-panel">
@@ -599,7 +626,7 @@ export default function DinoGame() {
           onPointerDown={doJump}
           onContextMenu={(e) => e.preventDefault()}
         >
-          ^
+          <ArrowUp size={80} strokeWidth={2.5} />
         </button>
         <button
           className="btn-duck"
@@ -609,7 +636,7 @@ export default function DinoGame() {
           onPointerCancel={duckEnd}
           onContextMenu={(e) => e.preventDefault()}
         >
-          v
+          <ArrowDown size={80} strokeWidth={2.5} />
         </button>
       </div>
     </div>
