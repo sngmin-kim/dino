@@ -240,25 +240,25 @@ function drawScore(
 ) {
   if (flash) return
   const cx = W / 2
-  const topY = Math.round(H * 0.065)
+  const topY = Math.round(H * 0.065 + H * 0.04)
   const hiCol = dark ? '#777' : '#bbb'
   const mainCol = dark ? '#ccc' : '#535353'
 
   ctx.textAlign = 'center'
 
   // 최고 점수 (smaller, lighter)
-  ctx.font = '11px monospace'
+  ctx.font = '33px Galmuri11'
   ctx.fillStyle = hiCol
   ctx.fillText('최고 점수', cx, topY)
-  ctx.font = 'bold 15px monospace'
-  ctx.fillText(String(Math.floor(hiScore)).padStart(5, '0'), cx, topY + 17)
+  ctx.font = 'bold 45px Galmuri11'
+  ctx.fillText(String(Math.floor(hiScore)).padStart(5, '0'), cx, topY + 51)
 
   // 현재 점수 (normal)
-  ctx.font = '11px monospace'
+  ctx.font = '33px Galmuri11'
   ctx.fillStyle = mainCol
-  ctx.fillText('현재 점수', cx, topY + 38)
-  ctx.font = 'bold 20px monospace'
-  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), cx, topY + 60)
+  ctx.fillText('현재 점수', cx, topY + 114)
+  ctx.font = 'bold 60px Galmuri11'
+  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), cx, topY + 180)
 }
 
 // ─── Collision ────────────────────────────────────────────────────────────────
@@ -541,19 +541,19 @@ export default function DinoGame() {
         const cx = W / 2
         const midY = Math.round(GROUND_Y * 0.48)
         ctx.fillStyle = col
-        ctx.font = 'bold 22px monospace'
+        ctx.font = 'bold 22px Galmuri11'
         ctx.textAlign = 'center'
         ctx.fillText('게임 오버', cx, midY)
-        ctx.font = '13px monospace'
+        ctx.font = '13px Galmuri11'
         ctx.fillStyle = dark ? '#888' : '#999'
-        ctx.fillText('↑ 버튼으로 다시시작', cx, midY + 26)
+        ctx.fillText('^ 버튼으로 다시시작', cx, midY + 26)
       }
 
       if (!s.started) {
         ctx.fillStyle = dark ? '#aaa' : '#757575'
-        ctx.font = '14px monospace'
+        ctx.font = '42px Galmuri11'
         ctx.textAlign = 'center'
-        ctx.fillText('↑ 버튼으로 시작', W / 2, GROUND_Y - 70)
+        ctx.fillText('^ 버튼으로 시작', W / 2, GROUND_Y - 70)
       }
     }
 
@@ -599,7 +599,7 @@ export default function DinoGame() {
           onPointerDown={doJump}
           onContextMenu={(e) => e.preventDefault()}
         >
-          ↑
+          ^
         </button>
         <button
           className="btn-duck"
@@ -609,7 +609,7 @@ export default function DinoGame() {
           onPointerCancel={duckEnd}
           onContextMenu={(e) => e.preventDefault()}
         >
-          ↓
+          v
         </button>
       </div>
     </div>
