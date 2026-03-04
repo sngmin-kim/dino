@@ -17,6 +17,9 @@ const INITIAL_SPEED = 5.5
 const MAX_SPEED = 13
 const SPEED_INCREMENT = 0.0008
 const SCORE_INCREMENT = 0.025
+const DAY_HOLD_FRAMES   = 800   // ~13s 낮 유지
+const NIGHT_HOLD_FRAMES = 800   // ~13s 밤 유지
+const NIGHT_FADE_FRAMES = 60    // ~1s 페이드
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Dino {
@@ -38,8 +41,9 @@ interface GameState {
   stars: Star[]; ground: GroundBump[]
   speed: number; score: number; hiScore: number; scoreTick: number
   running: boolean; started: boolean; gameOver: boolean
-  nightFactor: number   // 0=낮, 1=밤 (서서히 변화)
-  nightProgress: number
+  nightFactor: number   // 0=낮, 1=밤
+  nightPhase: 'day' | 'toNight' | 'night' | 'toDay'
+  nightTimer: number
   lastObstacleX: number; userId: string | null
   flashScore: boolean; flashTick: number; nextObstacleDist: number
 }
@@ -209,16 +213,6 @@ function drawStars(ctx: CanvasRenderingContext2D, stars: Star[], alpha: number) 
   ctx.globalAlpha = 1
 }
 
-function drawFixedNum(ctx: CanvasRenderingContext2D, num: number, cx: number, y: number) {
-  const str = String(Math.floor(num)).padStart(5, '0')
-  const totalW = ctx.measureText(str).width
-  const cw = totalW / str.length
-  const startX = cx - totalW / 2
-  for (let i = 0; i < str.length; i++) {
-    ctx.fillText(str[i], startX + i * cw, y)
-  }
-}
-
 function drawScore(
   ctx: CanvasRenderingContext2D,
   score: number, hiScore: number, flash: boolean,
@@ -234,14 +228,14 @@ function drawScore(
   ctx.fillText('최고 점수', cx, topY)
   ctx.font = 'bold 45px Galmuri11'
   ctx.fillStyle = t.hi
-  drawFixedNum(ctx, hiScore, cx, topY + 51)
+  ctx.fillText(String(Math.floor(hiScore)).padStart(5, '0'), cx, topY + 51)
 
   ctx.font = '33px Galmuri11'
   ctx.fillStyle = t.score
   ctx.fillText('현재 점수', cx, topY + 114)
   ctx.font = 'bold 60px Galmuri11'
   ctx.fillStyle = t.score
-  drawFixedNum(ctx, score, cx, topY + 180)
+  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), cx, topY + 180)
 }
 
 // ─── Collision ────────────────────────────────────────────────────────────────
@@ -321,7 +315,7 @@ export default function DinoGame() {
       obstacles: [], clouds: makeClouds(), stars: makeStars(), ground: makeGroundBumps(),
       speed: INITIAL_SPEED, score: 0, hiScore: prev?.hiScore ?? 0,
       scoreTick: 0, running: false, started: false, gameOver: false,
-      nightFactor: 0, nightProgress: 0,
+      nightFactor: 0, nightPhase: 'day', nightTimer: DAY_HOLD_FRAMES,
       lastObstacleX: W, userId: prev?.userId ?? null,
       flashScore: false, flashTick: 0, nextObstacleDist: rand(120, 300),
     }
@@ -406,11 +400,19 @@ export default function DinoGame() {
       }
       if (s.flashTick > 0 && (--s.flashTick === 0)) s.flashScore = false
 
-      // 낮밤 서서히 전환
-      s.nightProgress += 0.0005 * s.speed
-      s.nightFactor = (Math.sin(s.nightProgress) + 1) / 2
+      // 낮밤 phase 기반 전환
+      s.nightTimer--
+      if (s.nightTimer <= 0) {
+        if (s.nightPhase === 'day')      { s.nightPhase = 'toNight'; s.nightTimer = NIGHT_FADE_FRAMES }
+        else if (s.nightPhase === 'toNight') { s.nightPhase = 'night'; s.nightTimer = NIGHT_HOLD_FRAMES }
+        else if (s.nightPhase === 'night')   { s.nightPhase = 'toDay'; s.nightTimer = NIGHT_FADE_FRAMES }
+        else                                 { s.nightPhase = 'day';   s.nightTimer = DAY_HOLD_FRAMES }
+      }
+      if (s.nightPhase === 'toNight')     s.nightFactor = 1 - s.nightTimer / NIGHT_FADE_FRAMES
+      else if (s.nightPhase === 'toDay')  s.nightFactor = s.nightTimer / NIGHT_FADE_FRAMES
+      else if (s.nightPhase === 'night')  s.nightFactor = 1
+      else                                s.nightFactor = 0
 
-      // React state 는 너무 자주 업데이트하면 성능 이슈 → 0.05 단위로만 notify
       const rounded = Math.round(s.nightFactor * 20) / 20
       if (rounded !== lastNightNotify) {
         lastNightNotify = rounded
