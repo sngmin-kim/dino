@@ -29,22 +29,30 @@ html, body {
   -webkit-user-select: none;
 }
 
+/* ── 게임 캔버스 영역 ── */
+.game-area {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
 .game-canvas {
-  width: 100%;
-  height: auto;
   display: block;
-  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
   image-rendering: pixelated;
 }
 
 /* ── 버튼 영역 ── */
 .controls {
-  flex: 1;
+  flex-shrink: 0;
+  height: min(96px, 14dvh);
   display: flex;
   flex-direction: row;
   gap: 12px;
-  padding: 16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
   align-items: center;
   justify-content: center;
 }
@@ -89,7 +97,7 @@ html, body {
 /* ── postMessage 디버그 패널 ── */
 .debug-panel {
   position: absolute;
-  bottom: 108px;        /* 버튼 영역 위 */
+  bottom: 8px;
   right: 8px;
   width: 220px;
   max-height: 220px;
