@@ -10,7 +10,6 @@ const INITIAL_SPEED = 6
 const MAX_SPEED = 14
 const SPEED_INCREMENT = 0.0008
 const SCORE_INCREMENT = 0.025
-const NIGHT_THRESHOLD = 700
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Dino {
@@ -339,7 +338,7 @@ function randInt(min: number, max: number) {
   return Math.floor(rand(min, max + 1))
 }
 
-function makeObstacle(score: number, speed: number): Obstacle {
+function makeObstacle(score: number): Obstacle {
   const canPtero = score > 300
   const isPtero = canPtero && Math.random() < 0.35
 
@@ -583,7 +582,7 @@ export default function DinoGame() {
       // Obstacles
       s.lastObstacleX -= s.speed
       if (s.lastObstacleX < s.nextObstacleDist) {
-        s.obstacles.push(makeObstacle(s.score, s.speed))
+        s.obstacles.push(makeObstacle(s.score))
         s.lastObstacleX = W + 20
         s.nextObstacleDist = rand(250, 600)
       }
