@@ -84,15 +84,18 @@ html, body {
 /* ── 게임오버 오버레이 ── */
 .gameover-overlay {
   position: absolute;
-  top: 4%;
+  top: 5vh;
   left: 0;
   right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   pointer-events: none;
   z-index: 20;
+  /* 컨트롤 버튼 영역(60vh) 넘지 않도록 */
+  max-height: 53vh;
+  overflow: hidden;
 }
 
 .gameover-title {
@@ -117,14 +120,25 @@ html, body {
   text-align: center;
 }
 
-.gameover-restart-btn {
+.btn-restart {
   pointer-events: auto;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  width: 100px;
+  height: 100px;
+  transition: transform 0.06s;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.gameover-restart-label {
-  font-family: 'Galmuri11', monospace;
-  font-size: 26px;
-  line-height: 1;
+.btn-restart:active {
+  transform: scale(0.94);
 }
 
 /* ── postMessage 디버그 패널 ── */

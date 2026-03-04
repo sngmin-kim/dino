@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { ArrowUp, ArrowDown } from 'lucide-react'
+import { ArrowUp, ArrowDown, RotateCcw } from 'lucide-react'
 
 interface LogEntry {
   dir: '←' | '→'
@@ -20,89 +20,79 @@ const SCORE_INCREMENT = 0.025
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Dino {
-  x: number
-  y: number
-  vy: number
-  onGround: boolean
-  ducking: boolean
-  frame: number
-  frameTick: number
-  dead: boolean
+  x: number; y: number; vy: number
+  onGround: boolean; ducking: boolean
+  frame: number; frameTick: number; dead: boolean
 }
-
 interface Obstacle {
   type: 'cactus' | 'ptero'
-  x: number
-  y: number
-  w: number
-  h: number
-  variant: number
-  frame: number
-  frameTick: number
+  x: number; y: number; w: number; h: number
+  variant: number; frame: number; frameTick: number
 }
-
-interface Cloud {
-  x: number
-  y: number
-  w: number
-}
-
-interface Star {
-  x: number
-  y: number
-  size: number
-}
-
-interface GroundBump {
-  x: number
-  y: number
-  w: number
-}
+interface Cloud { x: number; y: number; w: number }
+interface Star  { x: number; y: number; size: number }
+interface GroundBump { x: number; y: number; w: number }
 
 interface GameState {
-  dino: Dino
-  obstacles: Obstacle[]
-  clouds: Cloud[]
-  stars: Star[]
-  ground: GroundBump[]
-  speed: number
-  score: number
-  hiScore: number
-  scoreTick: number
-  running: boolean
-  started: boolean
-  gameOver: boolean
-  night: boolean
+  dino: Dino; obstacles: Obstacle[]; clouds: Cloud[]
+  stars: Star[]; ground: GroundBump[]
+  speed: number; score: number; hiScore: number; scoreTick: number
+  running: boolean; started: boolean; gameOver: boolean
+  nightFactor: number   // 0=낮, 1=밤 (서서히 변화)
   nightProgress: number
-  lastObstacleX: number
-  userId: string | null
-  flashScore: boolean
-  flashTick: number
-  nextObstacleDist: number
+  lastObstacleX: number; userId: string | null
+  flashScore: boolean; flashTick: number; nextObstacleDist: number
 }
 
-// ─── Drawing helpers ──────────────────────────────────────────────────────────
-function px(n: number) {
-  return Math.round(n)
+// ─── Color helpers ────────────────────────────────────────────────────────────
+function lerpC(day: string, night: string, t: number): string {
+  const parse = (h: string) => [
+    parseInt(h.slice(1, 3), 16),
+    parseInt(h.slice(3, 5), 16),
+    parseInt(h.slice(5, 7), 16),
+  ]
+  const [dr, dg, db] = parse(day)
+  const [nr, ng, nb] = parse(night)
+  const r = Math.round(dr + (nr - dr) * t)
+  const g = Math.round(dg + (ng - dg) * t)
+  const b = Math.round(db + (nb - db) * t)
+  return `rgb(${r},${g},${b})`
 }
 
-function drawDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) {
+// ─── Theme ────────────────────────────────────────────────────────────────────
+function theme(f: number) {
+  return {
+    bg:     lerpC('#f7f7f7', '#1a1a1a', f),
+    main:   lerpC('#535353', '#cccccc', f),
+    eye:    lerpC('#f7f7f7', '#1a1a1a', f),
+    pupil:  lerpC('#222222', '#999999', f),
+    cloud:  lerpC('#d0d0d0', '#444444', f),
+    bump:   lerpC('#aaaaaa', '#666666', f),
+    hi:     lerpC('#bbbbbb', '#777777', f),
+    score:  lerpC('#535353', '#cccccc', f),
+    hint:   lerpC('#757575', '#aaaaaa', f),
+    starA:  f,
+  }
+}
+
+function px(n: number) { return Math.round(n) }
+
+// ─── Drawing ──────────────────────────────────────────────────────────────────
+function drawDino(ctx: CanvasRenderingContext2D, dino: Dino, t: { main: string; eye: string; pupil: string }) {
   const x = px(dino.x)
   const y = px(dino.y)
-  const col = dark ? '#ccc' : '#535353'
-  const bg = dark ? '#1a1a1a' : '#f7f7f7'
-  const pupil = dark ? '#999' : '#222'
-  ctx.fillStyle = col
+  ctx.fillStyle = t.main
 
   if (dino.ducking) {
-    const by = y + 20
-    ctx.fillRect(x + 2, by, 38, 12)
-    ctx.fillRect(x + 26, by - 12, 18, 14)
-    ctx.fillStyle = bg
-    ctx.fillRect(x + 32, by - 10, 6, 6)
-    ctx.fillStyle = pupil
-    ctx.fillRect(x + 34, by - 9, 3, 3)
-    ctx.fillStyle = col
+    // shift down 12px so feet touch ground (GROUND_Y = dino.y + 50)
+    const by = y + 32
+    ctx.fillRect(x + 2, by, 38, 12)           // body
+    ctx.fillRect(x + 26, by - 12, 18, 14)     // head
+    ctx.fillStyle = t.eye
+    ctx.fillRect(x + 32, by - 10, 6, 6)       // eye white
+    ctx.fillStyle = t.pupil
+    ctx.fillRect(x + 34, by - 9, 3, 3)        // pupil
+    ctx.fillStyle = t.main
     if (dino.frame === 0) {
       ctx.fillRect(x + 6, by + 12, 10, 6)
       ctx.fillRect(x + 22, by + 12, 10, 4)
@@ -113,15 +103,15 @@ function drawDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) {
     return
   }
 
-  ctx.fillRect(x, y + 22, 10, 8)
-  ctx.fillRect(x + 8, y + 16, 34, 20)
-  ctx.fillRect(x + 30, y + 8, 14, 12)
-  ctx.fillRect(x + 24, y, 22, 14)
-  ctx.fillStyle = bg
-  ctx.fillRect(x + 34, y + 2, 7, 7)
-  ctx.fillStyle = pupil
-  ctx.fillRect(x + 37, y + 3, 3, 3)
-  ctx.fillStyle = col
+  ctx.fillRect(x, y + 22, 10, 8)         // tail
+  ctx.fillRect(x + 8, y + 16, 34, 20)    // body
+  ctx.fillRect(x + 30, y + 8, 14, 12)    // neck
+  ctx.fillRect(x + 24, y, 22, 14)        // head
+  ctx.fillStyle = t.eye
+  ctx.fillRect(x + 34, y + 2, 7, 7)      // eye white
+  ctx.fillStyle = t.pupil
+  ctx.fillRect(x + 37, y + 3, 3, 3)      // pupil
+  ctx.fillStyle = t.main
   if (!dino.onGround) {
     ctx.fillRect(x + 10, y + 36, 10, 8)
     ctx.fillRect(x + 26, y + 36, 10, 6)
@@ -134,15 +124,13 @@ function drawDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) {
   }
 }
 
-function drawDeadDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) {
-  drawDino(ctx, { ...dino, frame: 0, ducking: false }, dark)
+function drawDeadDino(ctx: CanvasRenderingContext2D, dino: Dino, t: { main: string; eye: string; pupil: string }) {
+  drawDino(ctx, { ...dino, frame: 0, ducking: false }, t)
   const x = px(dino.x)
   const y = px(dino.y)
-  const col = dark ? '#ccc' : '#535353'
-  const bg = dark ? '#1a1a1a' : '#f7f7f7'
-  ctx.fillStyle = bg
+  ctx.fillStyle = t.eye
   ctx.fillRect(x + 34, y + 2, 7, 7)
-  ctx.fillStyle = col
+  ctx.fillStyle = t.main
   ctx.fillRect(x + 34, y + 2, 2, 2)
   ctx.fillRect(x + 39, y + 2, 2, 2)
   ctx.fillRect(x + 36, y + 4, 3, 2)
@@ -156,11 +144,10 @@ const CACTUS_VARIANTS = [
   { bw: 26, bh: 50, lax: -16, lay: 14, law: 16, lah: 20, rax: 26, ray: 20, raw: 16, rah: 16 },
 ]
 
-function drawCactus(ctx: CanvasRenderingContext2D, obs: Obstacle, dark: boolean) {
-  ctx.fillStyle = dark ? '#ccc' : '#535353'
+function drawCactus(ctx: CanvasRenderingContext2D, obs: Obstacle, col: string) {
+  ctx.fillStyle = col
   const v = CACTUS_VARIANTS[obs.variant % CACTUS_VARIANTS.length]
-  const x = px(obs.x)
-  const y = px(obs.y)
+  const x = px(obs.x); const y = px(obs.y)
   ctx.fillRect(x, y, v.bw, v.bh)
   ctx.fillRect(x + v.lax, y + v.lay, v.law, v.lah)
   ctx.fillRect(x + v.lax, y + v.lay, v.law + 4, 6)
@@ -169,23 +156,23 @@ function drawCactus(ctx: CanvasRenderingContext2D, obs: Obstacle, dark: boolean)
   ctx.fillRect(x - 2, y + v.bh, v.bw + 4, 4)
 }
 
-function drawCactusGroup(ctx: CanvasRenderingContext2D, obs: Obstacle, dark: boolean) {
-  drawCactus(ctx, obs, dark)
-  if (obs.variant >= 3) drawCactus(ctx, { ...obs, x: obs.x + 20, variant: (obs.variant + 1) % 3 }, dark)
-  if (obs.variant >= 6) drawCactus(ctx, { ...obs, x: obs.x + 40, variant: (obs.variant + 2) % 3 }, dark)
+function drawCactusGroup(ctx: CanvasRenderingContext2D, obs: Obstacle, col: string) {
+  drawCactus(ctx, obs, col)
+  if (obs.variant >= 3) drawCactus(ctx, { ...obs, x: obs.x + 20, variant: (obs.variant + 1) % 3 }, col)
+  if (obs.variant >= 6) drawCactus(ctx, { ...obs, x: obs.x + 40, variant: (obs.variant + 2) % 3 }, col)
 }
 
-function drawPtero(ctx: CanvasRenderingContext2D, obs: Obstacle, dark: boolean) {
-  ctx.fillStyle = dark ? '#ccc' : '#535353'
-  const x = px(obs.x)
-  const y = px(obs.y)
+function drawPtero(ctx: CanvasRenderingContext2D, obs: Obstacle, t: { main: string; eye: string; pupil: string }) {
+  ctx.fillStyle = t.main
+  const x = px(obs.x); const y = px(obs.y)
   ctx.fillRect(x + 8, y + 8, 30, 12)
   ctx.fillRect(x + 34, y + 4, 14, 10)
   ctx.fillRect(x + 48, y + 6, 8, 4)
-  ctx.fillStyle = dark ? '#1a1a1a' : '#f7f7f7'
+  ctx.fillStyle = t.eye
   ctx.fillRect(x + 40, y + 5, 4, 4)
-  ctx.fillStyle = dark ? '#ccc' : '#535353'
+  ctx.fillStyle = t.pupil
   ctx.fillRect(x + 41, y + 6, 2, 2)
+  ctx.fillStyle = t.main
   ctx.fillRect(x, y + 10, 10, 6)
   ctx.fillRect(x - 4, y + 12, 6, 4)
   if (obs.frame === 0) {
@@ -197,11 +184,9 @@ function drawPtero(ctx: CanvasRenderingContext2D, obs: Obstacle, dark: boolean) 
   }
 }
 
-function drawCloud(ctx: CanvasRenderingContext2D, cloud: Cloud, dark: boolean) {
-  ctx.fillStyle = dark ? '#444' : '#d0d0d0'
-  const x = px(cloud.x)
-  const y = px(cloud.y)
-  const w = cloud.w
+function drawCloud(ctx: CanvasRenderingContext2D, cloud: Cloud, col: string) {
+  ctx.fillStyle = col
+  const x = px(cloud.x); const y = px(cloud.y); const w = cloud.w
   ctx.fillRect(x, y + 8, w, 8)
   ctx.fillRect(x + 4, y + 4, w - 16, 4)
   ctx.fillRect(x + 8, y, w - 24, 4)
@@ -209,23 +194,26 @@ function drawCloud(ctx: CanvasRenderingContext2D, cloud: Cloud, dark: boolean) {
   ctx.fillRect(x + w - 12, y + 12, 8, 4)
 }
 
-function drawGround(ctx: CanvasRenderingContext2D, bumps: GroundBump[], dark: boolean) {
-  ctx.fillStyle = dark ? '#ccc' : '#535353'
+function drawGround(ctx: CanvasRenderingContext2D, bumps: GroundBump[], t: { main: string; bump: string }) {
+  ctx.fillStyle = t.main
   ctx.fillRect(0, GROUND_Y, W, 2)
-  ctx.fillStyle = dark ? '#666' : '#aaa'
+  ctx.fillStyle = t.bump
   for (const b of bumps) ctx.fillRect(px(b.x), GROUND_Y + 4, b.w, b.y)
 }
 
-function drawStars(ctx: CanvasRenderingContext2D, stars: Star[]) {
+function drawStars(ctx: CanvasRenderingContext2D, stars: Star[], alpha: number) {
+  if (alpha <= 0) return
+  ctx.globalAlpha = alpha
   ctx.fillStyle = '#535353'
   for (const s of stars) ctx.fillRect(px(s.x), px(s.y), s.size, s.size)
+  ctx.globalAlpha = 1
 }
 
-// 고정폭 숫자 렌더링
 function drawFixedNum(ctx: CanvasRenderingContext2D, num: number, cx: number, y: number) {
   const str = String(Math.floor(num)).padStart(5, '0')
-  const cw = ctx.measureText('0').width
-  const startX = cx - (cw * str.length) / 2
+  const totalW = ctx.measureText(str).width
+  const cw = totalW / str.length
+  const startX = cx - totalW / 2
   for (let i = 0; i < str.length; i++) {
     ctx.fillText(str[i], startX + i * cw, y)
   }
@@ -233,48 +221,39 @@ function drawFixedNum(ctx: CanvasRenderingContext2D, num: number, cx: number, y:
 
 function drawScore(
   ctx: CanvasRenderingContext2D,
-  score: number,
-  hiScore: number,
-  flash: boolean,
-  dark: boolean,
+  score: number, hiScore: number, flash: boolean,
+  t: { hi: string; score: string },
 ) {
   if (flash) return
   const cx = W / 2
   const topY = Math.round(H * 0.065 + H * 0.04)
-  const hiCol = dark ? '#777' : '#bbb'
-  const mainCol = dark ? '#ccc' : '#535353'
 
-  // 최고 점수
-  ctx.font = '33px Galmuri11'
   ctx.textAlign = 'center'
-  ctx.fillStyle = hiCol
+  ctx.font = '33px Galmuri11'
+  ctx.fillStyle = t.hi
   ctx.fillText('최고 점수', cx, topY)
   ctx.font = 'bold 45px Galmuri11'
-  ctx.fillStyle = hiCol
+  ctx.fillStyle = t.hi
   drawFixedNum(ctx, hiScore, cx, topY + 51)
 
-  // 현재 점수
   ctx.font = '33px Galmuri11'
-  ctx.textAlign = 'center'
-  ctx.fillStyle = mainCol
+  ctx.fillStyle = t.score
   ctx.fillText('현재 점수', cx, topY + 114)
   ctx.font = 'bold 60px Galmuri11'
-  ctx.fillStyle = mainCol
+  ctx.fillStyle = t.score
   drawFixedNum(ctx, score, cx, topY + 180)
 }
 
 // ─── Collision ────────────────────────────────────────────────────────────────
 function getDinoBox(dino: Dino) {
-  if (dino.ducking) return { x: dino.x + 4, y: dino.y + 18, w: 38, h: 24 }
+  if (dino.ducking) return { x: dino.x + 4, y: dino.y + 20, w: 38, h: 30 }
   return { x: dino.x + 8, y: dino.y + 2, w: 36, h: 46 }
 }
-
 function getObsBox(obs: Obstacle) {
   if (obs.type === 'ptero') return { x: obs.x + 6, y: obs.y + 4, w: 44, h: 16 }
   const v = CACTUS_VARIANTS[obs.variant % CACTUS_VARIANTS.length]
   return { x: obs.x + 2, y: obs.y + 4, w: v.bw - 2, h: v.bh - 4 }
 }
-
 function collides(
   a: { x: number; y: number; w: number; h: number },
   b: { x: number; y: number; w: number; h: number },
@@ -294,35 +273,20 @@ function makeObstacle(score: number): Obstacle {
   }
   const variant = randInt(0, score > 500 ? 8 : 5)
   const v = CACTUS_VARIANTS[variant % CACTUS_VARIANTS.length]
-  return {
-    type: 'cactus',
-    x: W + 20,
-    y: GROUND_Y - v.bh - 2,
-    w: variant >= 6 ? 54 : variant >= 3 ? 34 : v.bw,
-    h: v.bh,
-    variant, frame: 0, frameTick: 0,
-  }
+  return { type: 'cactus', x: W + 20, y: GROUND_Y - v.bh - 2,
+    w: variant >= 6 ? 54 : variant >= 3 ? 34 : v.bw, h: v.bh, variant, frame: 0, frameTick: 0 }
 }
-
 function makeGroundBumps(): GroundBump[] {
-  return Array.from({ length: 25 }, () => ({
-    x: rand(0, W * 2), y: randInt(1, 3), w: randInt(2, 8),
-  }))
+  return Array.from({ length: 25 }, () => ({ x: rand(0, W * 2), y: randInt(1, 3), w: randInt(2, 8) }))
 }
-
 function makeClouds(): Cloud[] {
   return Array.from({ length: 5 }, (_, i) => ({
-    x: rand(i * 100, i * 100 + 100),
-    y: rand(GROUND_Y * 0.05, GROUND_Y * 0.65),
-    w: randInt(50, 90),
+    x: rand(i * 100, i * 100 + 100), y: rand(GROUND_Y * 0.05, GROUND_Y * 0.65), w: randInt(50, 90),
   }))
 }
-
 function makeStars(): Star[] {
   return Array.from({ length: 20 }, () => ({
-    x: rand(0, W),
-    y: rand(10, GROUND_Y * 0.75),
-    size: Math.random() < 0.4 ? 2 : 1,
+    x: rand(0, W), y: rand(10, GROUND_Y * 0.75), size: Math.random() < 0.4 ? 2 : 1,
   }))
 }
 
@@ -336,15 +300,14 @@ export default function DinoGame() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [isGameOver, setIsGameOver] = useState(false)
   const [currentScore, setCurrentScore] = useState(0)
-  const [isDark, setIsDark] = useState(false)
+  const [nightFactor, setNightFactor] = useState(0)
 
-  // stable refs for setters so game loop can call them
   const setIsGameOverRef = useRef(setIsGameOver)
   const setCurrentScoreRef = useRef(setCurrentScore)
-  const setIsDarkRef = useRef(setIsDark)
+  const setNightFactorRef = useRef(setNightFactor)
   setIsGameOverRef.current = setIsGameOver
   setCurrentScoreRef.current = setCurrentScore
-  setIsDarkRef.current = setIsDark
+  setNightFactorRef.current = setNightFactor
 
   const addLogRef = useRef((dir: '←' | '→', data: unknown) => {
     const t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -355,24 +318,12 @@ export default function DinoGame() {
     const prev = stateRef.current
     return {
       dino: { x: 60, y: GROUND_Y - 50, vy: 0, onGround: true, ducking: false, frame: 0, frameTick: 0, dead: false },
-      obstacles: [],
-      clouds: makeClouds(),
-      stars: makeStars(),
-      ground: makeGroundBumps(),
-      speed: INITIAL_SPEED,
-      score: 0,
-      hiScore: prev?.hiScore ?? 0,
-      scoreTick: 0,
-      running: false,
-      started: false,
-      gameOver: false,
-      night: false,
-      nightProgress: 0,
-      lastObstacleX: W,
-      userId: prev?.userId ?? null,
-      flashScore: false,
-      flashTick: 0,
-      nextObstacleDist: rand(120, 300),
+      obstacles: [], clouds: makeClouds(), stars: makeStars(), ground: makeGroundBumps(),
+      speed: INITIAL_SPEED, score: 0, hiScore: prev?.hiScore ?? 0,
+      scoreTick: 0, running: false, started: false, gameOver: false,
+      nightFactor: 0, nightProgress: 0,
+      lastObstacleX: W, userId: prev?.userId ?? null,
+      flashScore: false, flashTick: 0, nextObstacleDist: rand(120, 300),
     }
   }, [])
 
@@ -387,11 +338,7 @@ export default function DinoGame() {
       stateRef.current = next
       return
     }
-    if (!s.started) {
-      s.running = true
-      s.started = true
-      return
-    }
+    if (!s.started) { s.running = true; s.started = true; return }
     if (s.dino.onGround && !s.dino.ducking) {
       s.dino.vy = JUMP_VY
       s.dino.onGround = false
@@ -399,18 +346,14 @@ export default function DinoGame() {
   }, [initState])
 
   const duckStart = useCallback(() => { keysRef.current.duck = true }, [])
-  const duckEnd = useCallback(() => { keysRef.current.duck = false }, [])
+  const duckEnd   = useCallback(() => { keysRef.current.duck = false }, [])
 
-  // Keyboard (desktop 지원)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isJump = e.code === 'Space' || e.code === 'ArrowUp'
       const isDuck = e.code === 'ArrowDown'
       if (e.type === 'keydown') {
-        if (isJump && !keysRef.current.jumpPressed) {
-          keysRef.current.jumpPressed = true
-          doJump()
-        }
+        if (isJump && !keysRef.current.jumpPressed) { keysRef.current.jumpPressed = true; doJump() }
         if (isDuck) keysRef.current.duck = true
       } else {
         if (isJump) keysRef.current.jumpPressed = false
@@ -420,13 +363,9 @@ export default function DinoGame() {
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('keyup', onKey)
-    }
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey) }
   }, [doJump])
 
-  // postMessage 연동
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       addLogRef.current('←', e.data)
@@ -438,7 +377,6 @@ export default function DinoGame() {
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  // 게임 루프
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -454,41 +392,39 @@ export default function DinoGame() {
     ctx.scale(canvas.width / W, canvas.height / H)
     stateRef.current = initState()
 
+    let lastNightNotify = -1
+
     function update(s: GameState) {
       if (!s.running) return
-
       s.speed = Math.min(MAX_SPEED, s.speed + SPEED_INCREMENT)
       s.scoreTick += s.speed * SCORE_INCREMENT
       s.score += s.scoreTick * 0.016
       s.scoreTick *= 0.98
 
       if (Math.floor(s.score) % 100 === 0 && Math.floor(s.score) > 0 && !s.flashScore) {
-        s.flashScore = true
-        s.flashTick = 30
+        s.flashScore = true; s.flashTick = 30
       }
       if (s.flashTick > 0 && (--s.flashTick === 0)) s.flashScore = false
 
+      // 낮밤 서서히 전환
       s.nightProgress += 0.0005 * s.speed
-      s.night = (Math.sin(s.nightProgress) + 1) / 2 > 0.5
-      setIsDarkRef.current(s.night)
+      s.nightFactor = (Math.sin(s.nightProgress) + 1) / 2
+
+      // React state 는 너무 자주 업데이트하면 성능 이슈 → 0.05 단위로만 notify
+      const rounded = Math.round(s.nightFactor * 20) / 20
+      if (rounded !== lastNightNotify) {
+        lastNightNotify = rounded
+        setNightFactorRef.current(s.nightFactor)
+      }
 
       const { dino } = s
       dino.ducking = keysRef.current.duck && dino.onGround
-
       if (!dino.onGround) {
         dino.vy += GRAVITY
         dino.y += dino.vy
-        if (dino.y >= GROUND_Y - 50) {
-          dino.y = GROUND_Y - 50
-          dino.vy = 0
-          dino.onGround = true
-        }
+        if (dino.y >= GROUND_Y - 50) { dino.y = GROUND_Y - 50; dino.vy = 0; dino.onGround = true }
       }
-
-      if (++dino.frameTick > 6) {
-        dino.frameTick = 0
-        dino.frame = dino.frame === 0 ? 1 : 0
-      }
+      if (++dino.frameTick > 6) { dino.frameTick = 0; dino.frame = dino.frame === 0 ? 1 : 0 }
 
       s.lastObstacleX -= s.speed
       if (s.lastObstacleX < s.nextObstacleDist) {
@@ -500,30 +436,24 @@ export default function DinoGame() {
       for (const obs of s.obstacles) {
         obs.x -= s.speed
         if (obs.type === 'ptero' && ++obs.frameTick > 8) {
-          obs.frameTick = 0
-          obs.frame = obs.frame === 0 ? 1 : 0
+          obs.frameTick = 0; obs.frame = obs.frame === 0 ? 1 : 0
         }
         if (!dino.dead && collides(getDinoBox(dino), getObsBox(obs))) {
-          dino.dead = true
-          s.running = false
-          s.gameOver = true
+          dino.dead = true; s.running = false; s.gameOver = true
           if (s.score > s.hiScore) s.hiScore = s.score
           const payload = { type: 'GAME_SCORE', payload: { score: Math.floor(s.score) } }
           window.parent.postMessage(payload, '*')
           addLogRef.current('→', payload)
           setIsGameOverRef.current(true)
           setCurrentScoreRef.current(s.score)
+          setNightFactorRef.current(s.nightFactor)
         }
       }
-      s.obstacles = s.obstacles.filter((o) => o.x > -100)
+      s.obstacles = s.obstacles.filter(o => o.x > -100)
 
       for (const c of s.clouds) {
         c.x -= s.speed * 0.15
-        if (c.x + c.w < 0) {
-          c.x = W + rand(0, 80)
-          c.y = rand(GROUND_Y * 0.05, GROUND_Y * 0.65)
-          c.w = randInt(50, 90)
-        }
+        if (c.x + c.w < 0) { c.x = W + rand(0, 80); c.y = rand(GROUND_Y * 0.05, GROUND_Y * 0.65); c.w = randInt(50, 90) }
       }
       for (const b of s.ground) {
         b.x -= s.speed
@@ -532,28 +462,27 @@ export default function DinoGame() {
     }
 
     function render(s: GameState) {
-      const dark = s.night
-      ctx.fillStyle = dark ? '#1a1a1a' : '#f7f7f7'
+      const th = theme(s.nightFactor)
+      const dino3 = { main: th.main, eye: th.eye, pupil: th.pupil }
+      ctx.fillStyle = th.bg
       ctx.fillRect(0, 0, W, H)
 
-      if (dark) drawStars(ctx, s.stars)
-      drawGround(ctx, s.ground, dark)
-      for (const c of s.clouds) drawCloud(ctx, c, dark)
+      drawStars(ctx, s.stars, th.starA)
+      drawGround(ctx, s.ground, { main: th.main, bump: th.bump })
+      for (const c of s.clouds) drawCloud(ctx, c, th.cloud)
       for (const obs of s.obstacles) {
-        if (obs.type === 'cactus') drawCactusGroup(ctx, obs, dark)
-        else drawPtero(ctx, obs, dark)
+        if (obs.type === 'cactus') drawCactusGroup(ctx, obs, th.main)
+        else drawPtero(ctx, obs, dino3)
       }
+      if (s.dino.dead) drawDeadDino(ctx, s.dino, dino3)
+      else drawDino(ctx, s.dino, dino3)
 
-      if (s.dino.dead) drawDeadDino(ctx, s.dino, dark)
-      else drawDino(ctx, s.dino, dark)
-
-      // 게임오버 시 점수 숨김 (HTML 오버레이로 대체)
       if (!s.gameOver) {
-        drawScore(ctx, s.score, s.hiScore, s.flashScore && s.flashTick % 8 < 4, dark)
+        drawScore(ctx, s.score, s.hiScore, s.flashScore && s.flashTick % 8 < 4, { hi: th.hi, score: th.score })
       }
 
       if (!s.started) {
-        ctx.fillStyle = dark ? '#aaa' : '#757575'
+        ctx.fillStyle = th.hint
         ctx.font = '42px Galmuri11'
         ctx.textAlign = 'center'
         ctx.fillText('↑ 버튼으로 시작', W / 2, GROUND_Y - 70)
@@ -566,41 +495,37 @@ export default function DinoGame() {
       render(s)
       rafRef.current = requestAnimationFrame(loop)
     }
-
     rafRef.current = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(rafRef.current)
   }, [initState])
 
   const scoreStr = String(Math.floor(currentScore)).padStart(5, '0')
-  const scoreCol = isDark ? '#ccc' : '#535353'
-  const labelCol = isDark ? '#888' : '#999'
+  const th = theme(nightFactor)
 
   return (
     <div className="game-wrapper">
       <div className="game-area">
         <canvas ref={canvasRef} className="game-canvas" />
 
-        {/* 게임오버 HTML 오버레이 */}
         {isGameOver && (
           <div className="gameover-overlay">
-            <div className="gameover-title" style={{ color: scoreCol }}>게임 오버</div>
-            <div className="gameover-score" style={{ color: scoreCol }}>
+            <div className="gameover-title" style={{ color: th.score }}>게임 오버</div>
+            <div className="gameover-score">
               {scoreStr.split('').map((ch, i) => (
-                <span key={i} className="score-digit">{ch}</span>
+                <span key={i} className="score-digit" style={{ color: th.score }}>{ch}</span>
               ))}
             </div>
             <button
-              className="btn-jump gameover-restart-btn"
+              className="btn-restart"
               onPointerDown={doJump}
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={e => e.preventDefault()}
+              style={{ background: th.score, color: th.bg }}
             >
-              <ArrowUp size={80} strokeWidth={2.5} />
+              <RotateCcw size={52} strokeWidth={2.5} />
             </button>
-            <div className="gameover-restart-label" style={{ color: labelCol }}>버튼으로 다시시작</div>
           </div>
         )}
 
-        {/* postMessage 디버그 패널 */}
         <div className="debug-panel">
           <div className="debug-title">postMessage 디버그</div>
           {logs.length === 0 ? (
@@ -619,22 +544,15 @@ export default function DinoGame() {
         </div>
       </div>
 
-      {/* 버튼 — 캔버스 위 오버레이 */}
       <div className="controls">
-        <button
-          className="btn-jump"
-          onPointerDown={doJump}
-          onContextMenu={(e) => e.preventDefault()}
-        >
+        <button className="btn-jump" onPointerDown={doJump} onContextMenu={e => e.preventDefault()}>
           <ArrowUp size={80} strokeWidth={2.5} />
         </button>
         <button
           className="btn-duck"
-          onPointerDown={duckStart}
-          onPointerUp={duckEnd}
-          onPointerLeave={duckEnd}
-          onPointerCancel={duckEnd}
-          onContextMenu={(e) => e.preventDefault()}
+          onPointerDown={duckStart} onPointerUp={duckEnd}
+          onPointerLeave={duckEnd} onPointerCancel={duckEnd}
+          onContextMenu={e => e.preventDefault()}
         >
           <ArrowDown size={80} strokeWidth={2.5} />
         </button>
