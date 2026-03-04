@@ -408,8 +408,8 @@ export default function DinoGame() {
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       addLogRef.current('←', e.data)
-      if (e.data?.type === 'GAME_INIT' && typeof e.data.userId === 'string') {
-        if (stateRef.current) stateRef.current.userId = e.data.userId
+      if (e.data?.type === 'GAME_INIT' && typeof e.data.payload?.userId === 'string') {
+        if (stateRef.current) stateRef.current.userId = e.data.payload.userId
       }
     }
     window.addEventListener('message', onMessage)
@@ -481,7 +481,7 @@ export default function DinoGame() {
           s.running = false
           s.gameOver = true
           if (s.score > s.hiScore) s.hiScore = s.score
-          const payload = { type: 'GAME_SCORE', score: Math.floor(s.score) }
+          const payload = { type: 'GAME_SCORE', payload: { score: Math.floor(s.score) } }
           window.parent.postMessage(payload, '*')
           addLogRef.current('→', payload)
         }
