@@ -8,8 +8,8 @@ interface LogEntry {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const W = 480
-const H = 400
-const GROUND_Y = 330
+let H = 400
+let GROUND_Y = 330
 const GRAVITY = 0.6
 const JUMP_VY = -13
 const INITIAL_SPEED = 5.5
@@ -420,11 +420,16 @@ export default function DinoGame() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+    const gameArea = canvas.parentElement!
+    const cssW = gameArea.clientWidth
+    const cssH = gameArea.clientHeight
     const dpr = window.devicePixelRatio || 1
-    canvas.width = W * dpr
-    canvas.height = H * dpr
+    H = Math.round(W * cssH / cssW)
+    GROUND_Y = H - 70
+    canvas.width = Math.round(cssW * dpr)
+    canvas.height = Math.round(cssH * dpr)
     const ctx = canvas.getContext('2d')!
-    ctx.scale(dpr, dpr)
+    ctx.scale(canvas.width / W, canvas.height / H)
     stateRef.current = initState()
 
     function update(s: GameState) {
