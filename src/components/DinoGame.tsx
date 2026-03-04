@@ -8,8 +8,8 @@ interface LogEntry {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const W = 480
-const H = 270
-const GROUND_Y = 226
+const H = 400
+const GROUND_Y = 330
 const GRAVITY = 0.6
 const JUMP_VY = -13
 const INITIAL_SPEED = 5.5
@@ -251,10 +251,10 @@ function drawScore(
 ) {
   if (flash) return
   ctx.fillStyle = dark ? '#ccc' : '#535353'
-  ctx.font = 'bold 14px monospace'
+  ctx.font = 'bold 18px monospace'
   ctx.textAlign = 'right'
-  ctx.fillText('HI ' + String(Math.floor(hiScore)).padStart(5, '0'), W - 72, 26)
-  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), W - 8, 26)
+  ctx.fillText('HI ' + String(Math.floor(hiScore)).padStart(5, '0'), W - 90, 32)
+  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), W - 14, 32)
 }
 
 // ─── Collision ────────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ function makeClouds(): Cloud[] {
 
 function makeStars(): Star[] {
   return Array.from({ length: 12 }, () => ({
-    x: rand(0, W), y: rand(10, 130), size: Math.random() < 0.4 ? 2 : 1,
+    x: rand(0, W), y: rand(10, 220), size: Math.random() < 0.4 ? 2 : 1,
   }))
 }
 
@@ -420,7 +420,11 @@ export default function DinoGame() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = W * dpr
+    canvas.height = H * dpr
     const ctx = canvas.getContext('2d')!
+    ctx.scale(dpr, dpr)
     stateRef.current = initState()
 
     function update(s: GameState) {
@@ -558,24 +562,26 @@ export default function DinoGame() {
 
   return (
     <div className="game-wrapper">
-      <canvas ref={canvasRef} width={W} height={H} className="game-canvas" />
+      <div className="game-area">
+        <canvas ref={canvasRef} className="game-canvas" />
 
-      {/* postMessage 디버그 패널 */}
-      <div className="debug-panel">
-        <div className="debug-title">postMessage 디버그</div>
-        {logs.length === 0 ? (
-          <div className="debug-empty">이벤트 없음</div>
-        ) : (
-          logs.map((log, i) => (
-            <div key={i} className="debug-entry">
-              <span className={log.dir === '←' ? 'debug-recv' : 'debug-send'}>
-                {log.dir} {log.dir === '←' ? '수신' : '전송'}
-              </span>
-              <span className="debug-time">{log.t}</span>
-              <div className="debug-json">{log.json}</div>
-            </div>
-          ))
-        )}
+        {/* postMessage 디버그 패널 */}
+        <div className="debug-panel">
+          <div className="debug-title">postMessage 디버그</div>
+          {logs.length === 0 ? (
+            <div className="debug-empty">이벤트 없음</div>
+          ) : (
+            logs.map((log, i) => (
+              <div key={i} className="debug-entry">
+                <span className={log.dir === '←' ? 'debug-recv' : 'debug-send'}>
+                  {log.dir} {log.dir === '←' ? '수신' : '전송'}
+                </span>
+                <span className="debug-time">{log.t}</span>
+                <div className="debug-json">{log.json}</div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
       <div className="controls">
         <button
@@ -599,3 +605,4 @@ export default function DinoGame() {
     </div>
   )
 }
+
