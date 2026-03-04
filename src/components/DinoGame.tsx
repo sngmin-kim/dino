@@ -88,65 +88,56 @@ function px(n: number) {
 function drawDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) {
   const x = px(dino.x)
   const y = px(dino.y)
-  const color = dark ? '#ccc' : '#535353'
+  const col = dark ? '#ccc' : '#535353'
   const bg = dark ? '#1a1a1a' : '#f7f7f7'
-  ctx.fillStyle = color
+  const pupil = dark ? '#999' : '#222'
+  ctx.fillStyle = col
 
   if (dino.ducking) {
-    const dy = y + 16
-    ctx.fillRect(x, dy, 44, 16)
-    ctx.fillRect(x + 32, dy - 8, 12, 8)
-    ctx.fillRect(x + 36, dy - 12, 8, 4)
+    // Simple flat crouching form
+    const by = y + 20
+    ctx.fillRect(x + 2, by, 38, 12)           // flat body
+    ctx.fillRect(x + 26, by - 12, 18, 14)     // head to the right
     ctx.fillStyle = bg
-    ctx.fillRect(x + 38, dy - 10, 4, 4)
-    ctx.fillStyle = dark ? '#333' : '#535353'
-    ctx.fillRect(x + 40, dy - 9, 2, 2)
-    ctx.fillStyle = color
-    ctx.fillRect(x + 44, dy - 6, 2, 2)
-    const lf = dino.frame
-    if (lf === 0) {
-      ctx.fillRect(x + 4, dy + 16, 8, 8)
-      ctx.fillRect(x + 20, dy + 16, 8, 4)
+    ctx.fillRect(x + 32, by - 10, 6, 6)       // eye white
+    ctx.fillStyle = pupil
+    ctx.fillRect(x + 34, by - 9, 3, 3)        // pupil
+    ctx.fillStyle = col
+    if (dino.frame === 0) {
+      ctx.fillRect(x + 6, by + 12, 10, 6)
+      ctx.fillRect(x + 22, by + 12, 10, 4)
     } else {
-      ctx.fillRect(x + 4, dy + 16, 8, 4)
-      ctx.fillRect(x + 20, dy + 16, 8, 8)
+      ctx.fillRect(x + 6, by + 12, 10, 4)
+      ctx.fillRect(x + 22, by + 12, 10, 6)
     }
-    ctx.fillRect(x, dy + 4, 4, 8)
-    ctx.fillRect(x - 4, dy + 6, 4, 6)
     return
   }
 
+  // Standing dino — clean, simple blocks
   // Tail
-  ctx.fillRect(x, y + 24, 4, 10)
-  ctx.fillRect(x - 4, y + 28, 4, 8)
+  ctx.fillRect(x, y + 22, 10, 8)
   // Body
-  ctx.fillRect(x, y + 12, 44, 24)
-  // Underbody cut
+  ctx.fillRect(x + 8, y + 16, 34, 20)
+  // Neck
+  ctx.fillRect(x + 30, y + 8, 14, 12)
+  // Head
+  ctx.fillRect(x + 24, y, 22, 14)
+  // Eye white
   ctx.fillStyle = bg
-  ctx.fillRect(x + 4, y + 28, 12, 8)
-  ctx.fillStyle = color
-  // Neck + head
-  ctx.fillRect(x + 32, y + 4, 12, 16)
-  ctx.fillRect(x + 24, y, 20, 16)
-  // Mouth
-  ctx.fillRect(x + 44, y + 8, 4, 2)
-  // Eye
-  ctx.fillStyle = bg
-  ctx.fillRect(x + 38, y + 2, 6, 6)
-  ctx.fillStyle = dark ? '#222' : '#535353'
-  ctx.fillRect(x + 40, y + 3, 3, 3)
-  ctx.fillStyle = color
-  // Arm
-  ctx.fillRect(x + 28, y + 20, 8, 4)
+  ctx.fillRect(x + 34, y + 2, 7, 7)
+  // Pupil
+  ctx.fillStyle = pupil
+  ctx.fillRect(x + 37, y + 3, 3, 3)
+  ctx.fillStyle = col
   // Legs
   if (!dino.onGround) {
-    ctx.fillRect(x + 8, y + 36, 10, 8)
-    ctx.fillRect(x + 26, y + 36, 10, 4)
-  } else if (dino.frame === 0) {
-    ctx.fillRect(x + 8, y + 36, 10, 14)
+    ctx.fillRect(x + 10, y + 36, 10, 8)
     ctx.fillRect(x + 26, y + 36, 10, 6)
+  } else if (dino.frame === 0) {
+    ctx.fillRect(x + 10, y + 36, 10, 14)
+    ctx.fillRect(x + 26, y + 36, 10, 7)
   } else {
-    ctx.fillRect(x + 8, y + 36, 10, 6)
+    ctx.fillRect(x + 10, y + 36, 10, 7)
     ctx.fillRect(x + 26, y + 36, 10, 14)
   }
 }
@@ -155,18 +146,18 @@ function drawDeadDino(ctx: CanvasRenderingContext2D, dino: Dino, dark: boolean) 
   drawDino(ctx, { ...dino, frame: 0, ducking: false }, dark)
   const x = px(dino.x)
   const y = px(dino.y)
-  const color = dark ? '#ccc' : '#535353'
+  const col = dark ? '#ccc' : '#535353'
   const bg = dark ? '#1a1a1a' : '#f7f7f7'
-  // Erase eye
+  // Erase normal eye
   ctx.fillStyle = bg
-  ctx.fillRect(x + 38, y + 2, 6, 6)
-  // X eyes
-  ctx.fillStyle = color
-  ctx.fillRect(x + 38, y + 2, 2, 2)
-  ctx.fillRect(x + 42, y + 2, 2, 2)
-  ctx.fillRect(x + 38, y + 6, 2, 2)
-  ctx.fillRect(x + 42, y + 6, 2, 2)
-  ctx.fillRect(x + 40, y + 4, 2, 2)
+  ctx.fillRect(x + 34, y + 2, 7, 7)
+  // Draw X eyes
+  ctx.fillStyle = col
+  ctx.fillRect(x + 34, y + 2, 2, 2)
+  ctx.fillRect(x + 39, y + 2, 2, 2)
+  ctx.fillRect(x + 36, y + 4, 3, 2)
+  ctx.fillRect(x + 34, y + 7, 2, 2)
+  ctx.fillRect(x + 39, y + 7, 2, 2)
 }
 
 const CACTUS_VARIANTS = [
@@ -201,14 +192,12 @@ function drawPtero(ctx: CanvasRenderingContext2D, obs: Obstacle, dark: boolean) 
   ctx.fillRect(x + 8, y + 8, 30, 12)
   ctx.fillRect(x + 34, y + 4, 14, 10)
   ctx.fillRect(x + 48, y + 6, 8, 4)
-  // Eye
   ctx.fillStyle = dark ? '#1a1a1a' : '#f7f7f7'
   ctx.fillRect(x + 40, y + 5, 4, 4)
   ctx.fillStyle = dark ? '#ccc' : '#535353'
   ctx.fillRect(x + 41, y + 6, 2, 2)
   ctx.fillRect(x, y + 10, 10, 6)
   ctx.fillRect(x - 4, y + 12, 6, 4)
-  // Wings
   if (obs.frame === 0) {
     ctx.fillRect(x + 4, y, 28, 8)
     ctx.fillRect(x + 8, y - 6, 16, 6)
@@ -250,17 +239,32 @@ function drawScore(
   dark: boolean,
 ) {
   if (flash) return
-  ctx.fillStyle = dark ? '#ccc' : '#535353'
-  ctx.font = 'bold 18px monospace'
-  ctx.textAlign = 'right'
-  ctx.fillText('HI ' + String(Math.floor(hiScore)).padStart(5, '0'), W - 90, 32)
-  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), W - 14, 32)
+  const cx = W / 2
+  const topY = Math.round(H * 0.065)
+  const hiCol = dark ? '#777' : '#bbb'
+  const mainCol = dark ? '#ccc' : '#535353'
+
+  ctx.textAlign = 'center'
+
+  // 최고 점수 (smaller, lighter)
+  ctx.font = '11px monospace'
+  ctx.fillStyle = hiCol
+  ctx.fillText('최고 점수', cx, topY)
+  ctx.font = 'bold 15px monospace'
+  ctx.fillText(String(Math.floor(hiScore)).padStart(5, '0'), cx, topY + 17)
+
+  // 현재 점수 (normal)
+  ctx.font = '11px monospace'
+  ctx.fillStyle = mainCol
+  ctx.fillText('현재 점수', cx, topY + 38)
+  ctx.font = 'bold 20px monospace'
+  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), cx, topY + 60)
 }
 
 // ─── Collision ────────────────────────────────────────────────────────────────
 function getDinoBox(dino: Dino) {
-  if (dino.ducking) return { x: dino.x + 4, y: dino.y + 16, w: 42, h: 22 }
-  return { x: dino.x + 4, y: dino.y + 2, w: 38, h: 46 }
+  if (dino.ducking) return { x: dino.x + 4, y: dino.y + 18, w: 38, h: 24 }
+  return { x: dino.x + 8, y: dino.y + 2, w: 36, h: 46 }
 }
 
 function getObsBox(obs: Obstacle) {
@@ -305,14 +309,18 @@ function makeGroundBumps(): GroundBump[] {
 }
 
 function makeClouds(): Cloud[] {
-  return Array.from({ length: 4 }, (_, i) => ({
-    x: rand(i * 120, i * 120 + 120), y: rand(30, 90), w: randInt(50, 90),
+  return Array.from({ length: 5 }, (_, i) => ({
+    x: rand(i * 100, i * 100 + 100),
+    y: rand(GROUND_Y * 0.05, GROUND_Y * 0.65),
+    w: randInt(50, 90),
   }))
 }
 
 function makeStars(): Star[] {
-  return Array.from({ length: 12 }, () => ({
-    x: rand(0, W), y: rand(10, 220), size: Math.random() < 0.4 ? 2 : 1,
+  return Array.from({ length: 20 }, () => ({
+    x: rand(0, W),
+    y: rand(10, GROUND_Y * 0.75),
+    size: Math.random() < 0.4 ? 2 : 1,
   }))
 }
 
@@ -324,7 +332,6 @@ export default function DinoGame() {
   const keysRef = useRef({ duck: false, jumpPressed: false })
 
   const [logs, setLogs] = useState<LogEntry[]>([])
-  // setLogs는 stable ref이므로 useRef 초기화 시점에 안전하게 캡처됨
   const addLogRef = useRef((dir: '←' | '→', data: unknown) => {
     const t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     setLogs(prev => [{ dir, json: JSON.stringify(data), t }, ...prev].slice(0, 8))
@@ -425,7 +432,7 @@ export default function DinoGame() {
     const cssH = gameArea.clientHeight
     const dpr = window.devicePixelRatio || 1
     H = Math.round(W * cssH / cssW)
-    GROUND_Y = H - 70
+    GROUND_Y = Math.round(H * 0.45)
     canvas.width = Math.round(cssW * dpr)
     canvas.height = Math.round(cssH * dpr)
     const ctx = canvas.getContext('2d')!
@@ -499,7 +506,11 @@ export default function DinoGame() {
 
       for (const c of s.clouds) {
         c.x -= s.speed * 0.15
-        if (c.x + c.w < 0) { c.x = W + rand(0, 80); c.y = rand(30, 90); c.w = randInt(50, 90) }
+        if (c.x + c.w < 0) {
+          c.x = W + rand(0, 80)
+          c.y = rand(GROUND_Y * 0.05, GROUND_Y * 0.65)
+          c.w = randInt(50, 90)
+        }
       }
       for (const b of s.ground) {
         b.x -= s.speed
@@ -526,31 +537,23 @@ export default function DinoGame() {
       drawScore(ctx, s.score, s.hiScore, s.flashScore && s.flashTick % 8 < 4, dark)
 
       if (s.gameOver) {
-        ctx.fillStyle = dark ? '#ccc' : '#535353'
-        ctx.font = 'bold 18px monospace'
+        const col = dark ? '#ccc' : '#535353'
+        const cx = W / 2
+        const midY = Math.round(GROUND_Y * 0.48)
+        ctx.fillStyle = col
+        ctx.font = 'bold 22px monospace'
         ctx.textAlign = 'center'
-        ctx.fillText('G A M E  O V E R', W / 2, H / 2 - 8)
-        // 재시작 아이콘
-        const rx = W / 2, ry = H / 2 + 22
-        ctx.strokeStyle = dark ? '#ccc' : '#535353'
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.arc(rx, ry, 14, 0.4, Math.PI * 2 - 0.4)
-        ctx.stroke()
-        ctx.fillStyle = dark ? '#ccc' : '#535353'
-        ctx.beginPath()
-        ctx.moveTo(rx + 12, ry - 8)
-        ctx.lineTo(rx + 18, ry - 2)
-        ctx.lineTo(rx + 6, ry - 2)
-        ctx.closePath()
-        ctx.fill()
+        ctx.fillText('게임 오버', cx, midY)
+        ctx.font = '13px monospace'
+        ctx.fillStyle = dark ? '#888' : '#999'
+        ctx.fillText('↑ 버튼으로 다시시작', cx, midY + 26)
       }
 
       if (!s.started) {
         ctx.fillStyle = dark ? '#aaa' : '#757575'
-        ctx.font = '13px monospace'
+        ctx.font = '14px monospace'
         ctx.textAlign = 'center'
-        ctx.fillText('JUMP 버튼을 눌러 시작', W / 2, H - 20)
+        ctx.fillText('↑ 버튼으로 시작', W / 2, GROUND_Y - 70)
       }
     }
 
@@ -588,13 +591,15 @@ export default function DinoGame() {
           )}
         </div>
       </div>
+
+      {/* 버튼 — 캔버스 위 오버레이 */}
       <div className="controls">
         <button
           className="btn-jump"
           onPointerDown={doJump}
           onContextMenu={(e) => e.preventDefault()}
         >
-          ▲ JUMP
+          ↑
         </button>
         <button
           className="btn-duck"
@@ -604,10 +609,9 @@ export default function DinoGame() {
           onPointerCancel={duckEnd}
           onContextMenu={(e) => e.preventDefault()}
         >
-          ▼ DUCK
+          ↓
         </button>
       </div>
     </div>
   )
 }
-
