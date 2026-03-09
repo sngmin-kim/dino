@@ -1,12 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { ArrowUp, ArrowDown, RotateCcw } from 'lucide-react'
 
-interface LogEntry {
-  dir: '←' | '→'
-  json: string
-  t: string
-}
-
 // ─── Constants ───────────────────────────────────────────────────────────────
 const W = 480
 let H = 400
@@ -291,7 +285,6 @@ export default function DinoGame() {
   const rafRef = useRef<number>(0)
   const keysRef = useRef({ duck: false, jumpPressed: false })
 
-  const [logs, setLogs] = useState<LogEntry[]>([])
   const [isGameOver, setIsGameOver] = useState(false)
   const [currentScore, setCurrentScore] = useState(0)
   const [nightFactor, setNightFactor] = useState(0)
@@ -302,11 +295,6 @@ export default function DinoGame() {
   setIsGameOverRef.current = setIsGameOver
   setCurrentScoreRef.current = setCurrentScore
   setNightFactorRef.current = setNightFactor
-
-  const addLogRef = useRef((dir: '←' | '→', data: unknown) => {
-    const t = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    setLogs(prev => [{ dir, json: JSON.stringify(data), t }, ...prev].slice(0, 8))
-  })
 
   const initState = useCallback((): GameState => {
     const prev = stateRef.current
@@ -362,7 +350,6 @@ export default function DinoGame() {
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      addLogRef.current('←', e.data)
       if (e.data?.type === 'GAME_INIT' && typeof e.data.payload?.userId === 'string') {
         if (stateRef.current) stateRef.current.userId = e.data.payload.userId
       }
@@ -445,7 +432,6 @@ export default function DinoGame() {
           if (s.score > s.hiScore) s.hiScore = s.score
           const payload = { type: 'GAME_SCORE', payload: { score: Math.floor(s.score) } }
           window.parent.postMessage(payload, '*')
-          addLogRef.current('→', payload)
           setIsGameOverRef.current(true)
           setCurrentScoreRef.current(s.score)
           setNightFactorRef.current(s.nightFactor)
@@ -528,22 +514,6 @@ export default function DinoGame() {
           </div>
         )}
 
-        <div className="debug-panel">
-          <div className="debug-title">postMessage 디버그</div>
-          {logs.length === 0 ? (
-            <div className="debug-empty">이벤트 없음</div>
-          ) : (
-            logs.map((log, i) => (
-              <div key={i} className="debug-entry">
-                <span className={log.dir === '←' ? 'debug-recv' : 'debug-send'}>
-                  {log.dir} {log.dir === '←' ? '수신' : '전송'}
-                </span>
-                <span className="debug-time">{log.t}</span>
-                <div className="debug-json">{log.json}</div>
-              </div>
-            ))
-          )}
-        </div>
       </div>
 
       <div className="controls">
