@@ -7,9 +7,8 @@ let H = 400
 let GROUND_Y = 330
 const GRAVITY = 0.6
 const JUMP_VY = -13
-const INITIAL_SPEED = 4.5
+const INITIAL_SPEED = 3.5
 const MAX_SPEED = 11
-const SPEED_INCREMENT = 0.0005
 const SCORE_INCREMENT = 0.025
 const TUTORIAL_SPEED = 3.0
 
@@ -258,12 +257,16 @@ function rand(min: number, max: number) { return Math.random() * (max - min) + m
 function randInt(min: number, max: number) { return Math.floor(rand(min, max + 1)) }
 
 function makeObstacle(score: number): Obstacle {
-  const isPtero = score > 300 && Math.random() < 0.35
+  // 점수 구간별 새 등장 확률
+  const pteroChance = score > 500 ? 0.35 : score > 300 ? 0.25 : score > 150 ? 0.15 : 0
+  const isPtero = Math.random() < pteroChance
   if (isPtero) {
     const heights = [GROUND_Y - 80, GROUND_Y - 50, GROUND_Y - 100]
     return { type: 'ptero', x: W + 20, y: heights[randInt(0, 2)], w: 56, h: 36, variant: 0, frame: 0, frameTick: 0 }
   }
-  const variant = randInt(0, score > 500 ? 8 : 5)
+  // 점수 구간별 선인장 종류 제한
+  const maxVariant = score > 500 ? 8 : score > 300 ? 5 : score > 150 ? 5 : 2
+  const variant = randInt(0, maxVariant)
   const v = CACTUS_VARIANTS[variant % CACTUS_VARIANTS.length]
   return { type: 'cactus', x: W + 20, y: GROUND_Y - v.bh - 2,
     w: variant >= 6 ? 54 : variant >= 3 ? 34 : v.bw, h: v.bh, variant, frame: 0, frameTick: 0 }
@@ -313,7 +316,7 @@ export default function DinoGame() {
       scoreTick: 0, running: false, started: false, gameOver: false,
       nightFactor: 0, nightPhase: 'day', nightTimer: DAY_HOLD_FRAMES,
       lastObstacleX: W, userId: prev?.userId ?? null,
-      flashScore: false, flashTick: 0, nextObstacleDist: rand(120, 300),
+      flashScore: false, flashTick: 0, nextObstacleDist: rand(0, 50),
       tutorialPhase: 'none', tutorialTimer: 0,
     }
   }, [])
@@ -562,7 +565,7 @@ export default function DinoGame() {
         return
       }
       if (!s.running) return
-      s.speed = Math.min(MAX_SPEED, s.speed + SPEED_INCREMENT)
+      s.speed = Math.min(MAX_SPEED, 3.5 + Math.log2(1 + s.score / 50))
       s.scoreTick += s.speed * SCORE_INCREMENT
       s.score += s.scoreTick * 0.016
       s.scoreTick *= 0.98
@@ -604,7 +607,9 @@ export default function DinoGame() {
       if (s.lastObstacleX < s.nextObstacleDist) {
         s.obstacles.push(makeObstacle(s.score))
         s.lastObstacleX = W + 20
-        s.nextObstacleDist = rand(80, 260)
+        const minDist = Math.min(200, s.score * 0.25)
+        const maxDist = Math.min(300, 80 + s.score * 0.3)
+        s.nextObstacleDist = rand(minDist, maxDist)
       }
 
       for (const obs of s.obstacles) {
