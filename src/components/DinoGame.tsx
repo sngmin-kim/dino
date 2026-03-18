@@ -7,13 +7,13 @@ let H = 400
 let GROUND_Y = 330
 const GRAVITY = 0.6
 const JUMP_VY = -13
-const INITIAL_SPEED = 5.5
-const MAX_SPEED = 13
-const SPEED_INCREMENT = 0.0008
+const INITIAL_SPEED = 4.5
+const MAX_SPEED = 11
+const SPEED_INCREMENT = 0.0005
 const SCORE_INCREMENT = 0.025
 const TUTORIAL_SPEED = 3.0
 
-type TutorialPhase = 'none' | 'intro' | 'scrolling' | 'obstacle' | 'jumping' | 'success' | 'ready' | 'done'
+type TutorialPhase = 'none' | 'intro' | 'scrolling' | 'obstacle' | 'jumping' | 'success' | 'scrolling2' | 'ptero' | 'ducking' | 'duckSuccess' | 'ready' | 'done'
 const DAY_HOLD_FRAMES   = 800   // ~13s 낮 유지
 const NIGHT_HOLD_FRAMES = 800   // ~13s 밤 유지
 const NIGHT_FADE_FRAMES = 60    // ~1s 페이드
@@ -348,7 +348,20 @@ export default function DinoGame() {
     }
   }, [initState])
 
-  const duckStart = useCallback(() => { keysRef.current.duck = true }, [])
+  const duckStart = useCallback(() => {
+    const s = stateRef.current
+    if (s) {
+      const tp = s.tutorialPhase
+      if (tp === 'ptero') {
+        s.dino.ducking = true
+        s.tutorialPhase = 'ducking'
+        setTutorialPhaseRef.current('ducking')
+      } else if (tp !== 'none' && tp !== 'done' && tp !== 'ducking') {
+        return
+      }
+    }
+    keysRef.current.duck = true
+  }, [])
   const duckEnd   = useCallback(() => { keysRef.current.duck = false }, [])
 
   const handleTutorialNext = useCallback(() => {
@@ -365,7 +378,7 @@ export default function DinoGame() {
       const isDuck = e.code === 'ArrowDown'
       if (e.type === 'keydown') {
         if (isJump && !keysRef.current.jumpPressed) { keysRef.current.jumpPressed = true; doJump() }
-        if (isDuck) keysRef.current.duck = true
+        if (isDuck) duckStart()
       } else {
         if (isJump) keysRef.current.jumpPressed = false
         if (isDuck) keysRef.current.duck = false
@@ -375,7 +388,7 @@ export default function DinoGame() {
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKey)
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey) }
-  }, [doJump])
+  }, [doJump, duckStart])
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -471,6 +484,56 @@ export default function DinoGame() {
           setTutorialPhaseRef.current('obstacle')
         }
       } else if (tp === 'success') {
+        s.tutorialTimer--
+        if (s.tutorialTimer <= 0) {
+          s.tutorialPhase = 'scrolling2'
+          s.tutorialTimer = 120
+          setTutorialPhaseRef.current('scrolling2')
+        }
+      } else if (tp === 'scrolling2') {
+        s.tutorialTimer--
+        if (s.tutorialTimer <= 0) {
+          s.obstacles = [{
+            type: 'ptero', x: W + 20, y: GROUND_Y - 50,
+            w: 56, h: 36, variant: 0, frame: 0, frameTick: 0
+          }]
+          s.tutorialPhase = 'ptero'
+          setTutorialPhaseRef.current('ptero')
+        }
+      } else if (tp === 'ptero') {
+        for (const obs of s.obstacles) {
+          obs.x -= TUTORIAL_SPEED
+          if (++obs.frameTick > 8) { obs.frameTick = 0; obs.frame = obs.frame === 0 ? 1 : 0 }
+        }
+        if (s.obstacles.length > 0 && s.obstacles[0].x < -100) {
+          s.obstacles[0].x = W + 20
+          s.obstacles[0].y = GROUND_Y - 50
+        }
+      } else if (tp === 'ducking') {
+        s.dino.ducking = keysRef.current.duck
+        for (const obs of s.obstacles) {
+          obs.x -= TUTORIAL_SPEED
+          if (++obs.frameTick > 8) { obs.frameTick = 0; obs.frame = obs.frame === 0 ? 1 : 0 }
+        }
+        if (s.obstacles.length > 0) {
+          const obs = s.obstacles[0]
+          if (collides(getDinoBox(s.dino), getObsBox(obs))) {
+            s.dino.ducking = false
+            keysRef.current.duck = false
+            obs.x = W + 20
+            obs.y = GROUND_Y - 50
+            s.tutorialPhase = 'ptero'
+            setTutorialPhaseRef.current('ptero')
+          } else if (obs.x + obs.w < s.dino.x) {
+            s.dino.ducking = false
+            keysRef.current.duck = false
+            s.tutorialPhase = 'duckSuccess'
+            s.tutorialTimer = 120
+            s.obstacles = []
+            setTutorialPhaseRef.current('duckSuccess')
+          }
+        }
+      } else if (tp === 'duckSuccess') {
         s.tutorialTimer--
         if (s.tutorialTimer <= 0) {
           s.tutorialPhase = 'ready'
@@ -666,6 +729,24 @@ export default function DinoGame() {
           </div>
         )}
 
+        {tutorialPhase === 'ptero' && (
+          <div className="tutorial-overlay tutorial-overlay-top">
+            <div className="tutorial-step">
+              <div className="tutorial-message">새가 날아와요!<br/>엎드려볼까요?</div>
+              <div className="tutorial-finger">👇</div>
+            </div>
+          </div>
+        )}
+
+        {tutorialPhase === 'duckSuccess' && (
+          <div className="tutorial-overlay tutorial-overlay-top">
+            <div className="tutorial-step">
+              <div className="tutorial-emoji">🎉</div>
+              <div className="tutorial-message">잘했어요!</div>
+            </div>
+          </div>
+        )}
+
         {tutorialPhase === 'ready' && (
           <div className="tutorial-overlay">
             <div className="tutorial-step">
@@ -677,11 +758,11 @@ export default function DinoGame() {
       </div>
 
       <div className="controls">
-        <button className={`btn-jump${tutorialPhase === 'obstacle' ? ' btn-jump-pulse' : ''}`} onPointerDown={doJump} onContextMenu={e => e.preventDefault()}>
+        <button className={`btn-jump${tutorialPhase === 'obstacle' ? ' btn-jump-pulse' : ''}${tutorialPhase === 'ptero' ? ' btn-disabled' : ''}`} onPointerDown={doJump} onContextMenu={e => e.preventDefault()}>
           <ArrowUp size={80} strokeWidth={2.5} />
         </button>
         <button
-          className={`btn-duck${inTutorial ? ' btn-disabled' : ''}`}
+          className={`btn-duck${inTutorial && tutorialPhase !== 'ptero' && tutorialPhase !== 'ducking' ? ' btn-disabled' : ''}${tutorialPhase === 'ptero' ? ' btn-duck-pulse' : ''}`}
           onPointerDown={duckStart} onPointerUp={duckEnd}
           onPointerLeave={duckEnd} onPointerCancel={duckEnd}
           onContextMenu={e => e.preventDefault()}

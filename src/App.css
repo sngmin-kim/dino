@@ -233,6 +233,10 @@ html, body {
   animation: btnPulse 1s ease-in-out infinite;
 }
 
+.btn-duck-pulse {
+  animation: btnPulse 1s ease-in-out infinite;
+}
+
 .btn-disabled {
   opacity: 0.3;
   pointer-events: none;
