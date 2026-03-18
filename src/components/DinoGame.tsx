@@ -11,6 +11,9 @@ const INITIAL_SPEED = 5.5
 const MAX_SPEED = 13
 const SPEED_INCREMENT = 0.0008
 const SCORE_INCREMENT = 0.025
+const TUTORIAL_SPEED = 3.0
+
+type TutorialPhase = 'none' | 'intro' | 'scrolling' | 'obstacle' | 'jumping' | 'success' | 'ready' | 'done'
 const DAY_HOLD_FRAMES   = 800   // ~13s 낮 유지
 const NIGHT_HOLD_FRAMES = 800   // ~13s 밤 유지
 const NIGHT_FADE_FRAMES = 60    // ~1s 페이드
@@ -40,6 +43,7 @@ interface GameState {
   nightTimer: number
   lastObstacleX: number; userId: string | null
   flashScore: boolean; flashTick: number; nextObstacleDist: number
+  tutorialPhase: TutorialPhase; tutorialTimer: number
 }
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -291,10 +295,14 @@ export default function DinoGame() {
 
   const setIsGameOverRef = useRef(setIsGameOver)
   const setCurrentScoreRef = useRef(setCurrentScore)
+  const [tutorialPhase, setTutorialPhase] = useState<TutorialPhase>('none')
+
   const setNightFactorRef = useRef(setNightFactor)
+  const setTutorialPhaseRef = useRef(setTutorialPhase)
   setIsGameOverRef.current = setIsGameOver
   setCurrentScoreRef.current = setCurrentScore
   setNightFactorRef.current = setNightFactor
+  setTutorialPhaseRef.current = setTutorialPhase
 
   const initState = useCallback((): GameState => {
     const prev = stateRef.current
@@ -306,12 +314,25 @@ export default function DinoGame() {
       nightFactor: 0, nightPhase: 'day', nightTimer: DAY_HOLD_FRAMES,
       lastObstacleX: W, userId: prev?.userId ?? null,
       flashScore: false, flashTick: 0, nextObstacleDist: rand(120, 300),
+      tutorialPhase: 'none', tutorialTimer: 0,
     }
   }, [])
 
   const doJump = useCallback(() => {
     const s = stateRef.current
     if (!s) return
+    const tp = s.tutorialPhase
+    if (tp !== 'none' && tp !== 'done') {
+      if (tp === 'obstacle') {
+        if (s.dino.onGround && !s.dino.ducking) {
+          s.dino.vy = JUMP_VY
+          s.dino.onGround = false
+        }
+        s.tutorialPhase = 'jumping'
+        setTutorialPhaseRef.current('jumping')
+      }
+      return
+    }
     if (s.gameOver) {
       setIsGameOverRef.current(false)
       const next = initState()
@@ -329,6 +350,14 @@ export default function DinoGame() {
 
   const duckStart = useCallback(() => { keysRef.current.duck = true }, [])
   const duckEnd   = useCallback(() => { keysRef.current.duck = false }, [])
+
+  const handleTutorialNext = useCallback(() => {
+    const s = stateRef.current
+    if (!s || s.tutorialPhase !== 'intro') return
+    s.tutorialPhase = 'scrolling'
+    s.tutorialTimer = 120
+    setTutorialPhaseRef.current('scrolling')
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -373,9 +402,102 @@ export default function DinoGame() {
     ctx.scale(canvas.width / W, canvas.height / H)
     stateRef.current = initState()
 
+    if (!localStorage.getItem('dino_tutorial_done')) {
+      stateRef.current!.tutorialPhase = 'intro'
+      setTutorialPhaseRef.current('intro')
+    }
+
     let lastNightNotify = -1
 
+    function updateTutorial(s: GameState) {
+      const tp = s.tutorialPhase
+      if (tp === 'none' || tp === 'done' || tp === 'intro') return
+
+      if (++s.dino.frameTick > 6) { s.dino.frameTick = 0; s.dino.frame = s.dino.frame === 0 ? 1 : 0 }
+
+      for (const b of s.ground) {
+        b.x -= TUTORIAL_SPEED
+        if (b.x + b.w < 0) { b.x = W + rand(0, 40); b.w = randInt(2, 8); b.y = randInt(1, 3) }
+      }
+      for (const c of s.clouds) {
+        c.x -= TUTORIAL_SPEED * 0.15
+        if (c.x + c.w < 0) { c.x = W + rand(0, 80); c.y = rand(GROUND_Y * 0.05, GROUND_Y * 0.65); c.w = randInt(50, 90) }
+      }
+
+      if (!s.dino.onGround) {
+        s.dino.vy += GRAVITY
+        s.dino.y += s.dino.vy
+        if (s.dino.y >= GROUND_Y - 50) { s.dino.y = GROUND_Y - 50; s.dino.vy = 0; s.dino.onGround = true }
+      }
+
+      if (tp === 'scrolling') {
+        s.tutorialTimer--
+        if (s.tutorialTimer <= 0) {
+          const v = CACTUS_VARIANTS[0]
+          s.obstacles = [{
+            type: 'cactus', x: W + 20, y: GROUND_Y - v.bh - 2,
+            w: v.bw, h: v.bh, variant: 0, frame: 0, frameTick: 0
+          }]
+          s.tutorialPhase = 'obstacle'
+          setTutorialPhaseRef.current('obstacle')
+        }
+      } else if (tp === 'obstacle') {
+        for (const obs of s.obstacles) obs.x -= TUTORIAL_SPEED
+        if (s.obstacles.length > 0 && s.obstacles[0].x < -100) {
+          const v = CACTUS_VARIANTS[0]
+          s.obstacles[0].x = W + 20
+          s.obstacles[0].y = GROUND_Y - v.bh - 2
+        }
+      } else if (tp === 'jumping') {
+        for (const obs of s.obstacles) obs.x -= TUTORIAL_SPEED
+        if (s.obstacles.length > 0 && collides(getDinoBox(s.dino), getObsBox(s.obstacles[0]))) {
+          // 충돌 → 공룡 착지 + 장애물 재생성, obstacle 단계로 되돌림
+          s.dino.y = GROUND_Y - 50; s.dino.vy = 0; s.dino.onGround = true
+          const v = CACTUS_VARIANTS[0]
+          s.obstacles[0].x = W + 20
+          s.obstacles[0].y = GROUND_Y - v.bh - 2
+          s.tutorialPhase = 'obstacle'
+          setTutorialPhaseRef.current('obstacle')
+        } else if (s.obstacles.length > 0 && s.obstacles[0].x + s.obstacles[0].w < s.dino.x) {
+          s.tutorialPhase = 'success'
+          s.tutorialTimer = 120
+          s.obstacles = []
+          setTutorialPhaseRef.current('success')
+        } else if (s.obstacles.length > 0 && s.obstacles[0].x < -100) {
+          const v = CACTUS_VARIANTS[0]
+          s.obstacles[0].x = W + 20
+          s.obstacles[0].y = GROUND_Y - v.bh - 2
+          s.tutorialPhase = 'obstacle'
+          setTutorialPhaseRef.current('obstacle')
+        }
+      } else if (tp === 'success') {
+        s.tutorialTimer--
+        if (s.tutorialTimer <= 0) {
+          s.tutorialPhase = 'ready'
+          s.tutorialTimer = 120
+          setTutorialPhaseRef.current('ready')
+        }
+      } else if (tp === 'ready') {
+        s.tutorialTimer--
+        if (s.tutorialTimer <= 0) {
+          localStorage.setItem('dino_tutorial_done', '1')
+          s.tutorialPhase = 'done'
+          s.obstacles = []
+          s.dino = { x: 60, y: GROUND_Y - 50, vy: 0, onGround: true, ducking: false, frame: 0, frameTick: 0, dead: false }
+          s.running = true
+          s.started = true
+          s.speed = INITIAL_SPEED
+          s.score = 0
+          setTutorialPhaseRef.current('done')
+        }
+      }
+    }
+
     function update(s: GameState) {
+      if (s.tutorialPhase !== 'none' && s.tutorialPhase !== 'done') {
+        updateTutorial(s)
+        return
+      }
       if (!s.running) return
       s.speed = Math.min(MAX_SPEED, s.speed + SPEED_INCREMENT)
       s.scoreTick += s.speed * SCORE_INCREMENT
@@ -465,11 +587,12 @@ export default function DinoGame() {
       if (s.dino.dead) drawDeadDino(ctx, s.dino, dino3)
       else drawDino(ctx, s.dino, dino3)
 
-      if (!s.gameOver) {
+      const inTutorial = s.tutorialPhase !== 'none' && s.tutorialPhase !== 'done'
+      if (!s.gameOver && !inTutorial) {
         drawScore(ctx, s.score, s.hiScore, s.flashScore && s.flashTick % 8 < 4, { hi: th.hi, score: th.score })
       }
 
-      if (!s.started) {
+      if (!s.started && !inTutorial) {
         ctx.fillStyle = th.hint
         ctx.font = '42px Galmuri11'
         ctx.textAlign = 'center'
@@ -489,6 +612,7 @@ export default function DinoGame() {
 
   const scoreStr = String(Math.floor(currentScore)).padStart(5, '0')
   const th = theme(nightFactor)
+  const inTutorial = tutorialPhase !== 'none' && tutorialPhase !== 'done'
 
   return (
     <div className="game-wrapper">
@@ -514,14 +638,50 @@ export default function DinoGame() {
           </div>
         )}
 
+        {tutorialPhase === 'intro' && (
+          <div className="tutorial-overlay tutorial-overlay-bg">
+            <div className="tutorial-step">
+              <div className="tutorial-title">공룡 점프</div>
+              <div className="tutorial-message">장애물을 점프로 피해보세요!</div>
+              <button className="tutorial-next-btn" onPointerDown={handleTutorialNext} onContextMenu={e => e.preventDefault()}>시작!</button>
+            </div>
+          </div>
+        )}
+
+        {tutorialPhase === 'obstacle' && (
+          <div className="tutorial-overlay tutorial-overlay-top">
+            <div className="tutorial-step">
+              <div className="tutorial-message">앗! 장애물이 있어요!<br/>화면을 클릭해볼까요?</div>
+              <div className="tutorial-finger">👆</div>
+            </div>
+          </div>
+        )}
+
+        {tutorialPhase === 'success' && (
+          <div className="tutorial-overlay tutorial-overlay-top">
+            <div className="tutorial-step">
+              <div className="tutorial-emoji">🎉</div>
+              <div className="tutorial-message">와, 장애물을 넘었어요!</div>
+            </div>
+          </div>
+        )}
+
+        {tutorialPhase === 'ready' && (
+          <div className="tutorial-overlay">
+            <div className="tutorial-step">
+              <div className="tutorial-go">자 그럼 시작!</div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       <div className="controls">
-        <button className="btn-jump" onPointerDown={doJump} onContextMenu={e => e.preventDefault()}>
+        <button className={`btn-jump${tutorialPhase === 'obstacle' ? ' btn-jump-pulse' : ''}`} onPointerDown={doJump} onContextMenu={e => e.preventDefault()}>
           <ArrowUp size={80} strokeWidth={2.5} />
         </button>
         <button
-          className="btn-duck"
+          className={`btn-duck${inTutorial ? ' btn-disabled' : ''}`}
           onPointerDown={duckStart} onPointerUp={duckEnd}
           onPointerLeave={duckEnd} onPointerCancel={duckEnd}
           onContextMenu={e => e.preventDefault()}
