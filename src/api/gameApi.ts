@@ -33,7 +33,7 @@ declare global {
 }
 
 /** SeniorBridge가 주입될 때까지 폴링 (최대 3초) */
-function waitForBridge(timeout = 3000): Promise<SeniorBridge> {
+export function waitForBridge(timeout = 3000): Promise<SeniorBridge> {
   return new Promise((resolve, reject) => {
     if (window.SeniorBridge) return resolve(window.SeniorBridge)
     let elapsed = 0
@@ -203,7 +203,12 @@ export async function finishGame(
       body: JSON.stringify({ score, gameHistoryId }),
     })
     const ok = res?.ok ?? false
-    dlog('API', ok ? 'finishGame 성공' : 'finishGame 실패', `status=${res?.status}`)
+    if (!ok && res) {
+      const errBody = await res.text().catch(() => '')
+      dlog('API', 'finishGame 실패', `status=${res.status} body=${errBody}`)
+    } else {
+      dlog('API', ok ? 'finishGame 성공' : 'finishGame 실패', `status=${res?.status}`)
+    }
     return ok
   } catch (e) {
     dlog('API', 'finishGame 에러', String(e))

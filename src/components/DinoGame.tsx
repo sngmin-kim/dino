@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { ArrowUp, ArrowDown, RotateCcw } from 'lucide-react'
-import { startGame, finishGame, listenTokenRefresh, requestAppReady } from '../api/gameApi'
+import { ArrowUp, ArrowDown, RotateCcw, X } from 'lucide-react'
+import { startGame, finishGame, listenTokenRefresh, requestAppReady, waitForBridge } from '../api/gameApi'
 import { dlog } from '../lib/debug-log'
 import DebugPanel from './DebugPanel'
 
@@ -467,6 +467,11 @@ export default function DinoGame() {
       if (platform === 'cocoya') {
         await requestAppReady()
         listenTokenRefresh()
+
+        // GNB 숨기기 (requestAppReady와 독립적으로 실행)
+        waitForBridge().then((bridge) => {
+          bridge.request('GNB.SET_VISIBILITY', { visible: false })
+        }).catch(() => {})
       }
 
       if (platform === 'cocoya' && !localStorage.getItem('dino_tutorial_done')) {
@@ -778,6 +783,13 @@ export default function DinoGame() {
 
   return (
     <div className="game-wrapper">
+      <button
+        className="btn-exit"
+        onClick={() => history.back()}
+        onContextMenu={e => e.preventDefault()}
+      >
+        <X size={20} strokeWidth={2.5} />
+      </button>
       <DebugPanel />
       <div className="game-area">
         <canvas ref={canvasRef} className="game-canvas" />
