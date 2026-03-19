@@ -418,7 +418,10 @@ export default function DinoGame() {
     ctx.scale(canvas.width / W, canvas.height / H)
     stateRef.current = initState()
 
-    if (!localStorage.getItem('dino_tutorial_done')) {
+    const params = new URLSearchParams(window.location.search)
+    const platform = params.get('platform')
+
+    if (platform === 'cocoya' && !localStorage.getItem('dino_tutorial_done')) {
       stateRef.current!.tutorialPhase = 'intro'
       setTutorialPhaseRef.current('intro')
     }
