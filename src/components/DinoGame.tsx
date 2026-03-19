@@ -7,6 +7,8 @@ let H = 400
 let GROUND_Y = 330
 const GRAVITY = 0.6
 const JUMP_VY = -13
+const JUMP_HOLD_GRAVITY = 0.4
+const MAX_JUMP_HOLD_FRAMES = 6
 const INITIAL_SPEED = 3.5
 const MAX_SPEED = 11
 const SCORE_INCREMENT = 0.025
@@ -291,6 +293,8 @@ export default function DinoGame() {
   const stateRef = useRef<GameState | null>(null)
   const rafRef = useRef<number>(0)
   const keysRef = useRef({ duck: false, jumpPressed: false })
+  const jumpHeldRef = useRef(false)
+  const jumpHoldFramesRef = useRef(0)
 
   const [isGameOver, setIsGameOver] = useState(false)
   const [currentScore, setCurrentScore] = useState(0)
@@ -324,15 +328,19 @@ export default function DinoGame() {
   const doJump = useCallback(() => {
     const s = stateRef.current
     if (!s) return
+    jumpHeldRef.current = true
+    jumpHoldFramesRef.current = 0
     const tp = s.tutorialPhase
     if (tp !== 'none' && tp !== 'done') {
-      if (tp === 'obstacle') {
+      if (tp === 'obstacle' || tp === 'jumping') {
         if (s.dino.onGround && !s.dino.ducking) {
           s.dino.vy = JUMP_VY
           s.dino.onGround = false
         }
-        s.tutorialPhase = 'jumping'
-        setTutorialPhaseRef.current('jumping')
+        if (tp === 'obstacle') {
+          s.tutorialPhase = 'jumping'
+          setTutorialPhaseRef.current('jumping')
+        }
       }
       return
     }
@@ -350,6 +358,10 @@ export default function DinoGame() {
       s.dino.onGround = false
     }
   }, [initState])
+
+  const jumpEnd = useCallback(() => {
+    jumpHeldRef.current = false
+  }, [])
 
   const duckStart = useCallback(() => {
     const s = stateRef.current
@@ -383,7 +395,7 @@ export default function DinoGame() {
         if (isJump && !keysRef.current.jumpPressed) { keysRef.current.jumpPressed = true; doJump() }
         if (isDuck) duckStart()
       } else {
-        if (isJump) keysRef.current.jumpPressed = false
+        if (isJump) { keysRef.current.jumpPressed = false; jumpHeldRef.current = false }
         if (isDuck) keysRef.current.duck = false
       }
       if (isJump || isDuck) e.preventDefault()
@@ -406,27 +418,31 @@ export default function DinoGame() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const gameArea = canvas.parentElement!
-    const cssW = gameArea.clientWidth
-    const cssH = gameArea.clientHeight
-    const dpr = window.devicePixelRatio || 1
-    H = Math.round(W * cssH / cssW)
-    GROUND_Y = Math.round(H * 0.45)
-    canvas.width = Math.round(cssW * dpr)
-    canvas.height = Math.round(cssH * dpr)
-    const ctx = canvas.getContext('2d')!
-    ctx.scale(canvas.width / W, canvas.height / H)
-    stateRef.current = initState()
+    let cancelled = false
 
-    const params = new URLSearchParams(window.location.search)
-    const platform = params.get('platform')
+    function bootstrap() {
+      if (cancelled) return
+      const gameArea = canvas!.parentElement!
+      const cssW = gameArea.clientWidth
+      const cssH = gameArea.clientHeight
+      const dpr = window.devicePixelRatio || 1
+      H = Math.round(W * cssH / cssW)
+      GROUND_Y = Math.round(H * 0.45)
+      canvas!.width = Math.round(cssW * dpr)
+      canvas!.height = Math.round(cssH * dpr)
+      const ctx = canvas!.getContext('2d')!
+      ctx.scale(canvas!.width / W, canvas!.height / H)
+      stateRef.current = initState()
 
-    if (platform === 'cocoya' && !localStorage.getItem('dino_tutorial_done')) {
-      stateRef.current!.tutorialPhase = 'intro'
-      setTutorialPhaseRef.current('intro')
-    }
+      const params = new URLSearchParams(window.location.search)
+      const platform = params.get('platform')
 
-    let lastNightNotify = -1
+      if (platform === 'cocoya' && !localStorage.getItem('dino_tutorial_done')) {
+        stateRef.current!.tutorialPhase = 'intro'
+        setTutorialPhaseRef.current('intro')
+      }
+
+      let lastNightNotify = -1
 
     function updateTutorial(s: GameState) {
       const tp = s.tutorialPhase
@@ -444,7 +460,12 @@ export default function DinoGame() {
       }
 
       if (!s.dino.onGround) {
-        s.dino.vy += GRAVITY
+        if (jumpHeldRef.current && s.dino.vy < 0 && jumpHoldFramesRef.current < MAX_JUMP_HOLD_FRAMES) {
+          s.dino.vy += JUMP_HOLD_GRAVITY
+          jumpHoldFramesRef.current++
+        } else {
+          s.dino.vy += GRAVITY
+        }
         s.dino.y += s.dino.vy
         if (s.dino.y >= GROUND_Y - 50) { s.dino.y = GROUND_Y - 50; s.dino.vy = 0; s.dino.onGround = true }
       }
@@ -600,7 +621,12 @@ export default function DinoGame() {
       const { dino } = s
       dino.ducking = keysRef.current.duck && dino.onGround
       if (!dino.onGround) {
-        dino.vy += GRAVITY
+        if (jumpHeldRef.current && dino.vy < 0 && jumpHoldFramesRef.current < MAX_JUMP_HOLD_FRAMES) {
+          dino.vy += JUMP_HOLD_GRAVITY
+          jumpHoldFramesRef.current++
+        } else {
+          dino.vy += GRAVITY
+        }
         dino.y += dino.vy
         if (dino.y >= GROUND_Y - 50) { dino.y = GROUND_Y - 50; dino.vy = 0; dino.onGround = true }
       }
@@ -671,14 +697,37 @@ export default function DinoGame() {
       }
     }
 
-    function loop() {
+    const FIXED_DT = 1000 / 60  // 60fps 기준 고정 timestep
+    let lastTime = 0
+    let accumulator = 0
+
+    function loop(now: number) {
+      if (lastTime === 0) lastTime = now
+      const elapsed = Math.min(now - lastTime, 200) // 200ms cap (탭 전환 등 방지)
+      lastTime = now
+      accumulator += elapsed
+
       const s = stateRef.current!
-      update(s)
+      while (accumulator >= FIXED_DT) {
+        update(s)
+        accumulator -= FIXED_DT
+      }
       render(s)
       rafRef.current = requestAnimationFrame(loop)
     }
-    rafRef.current = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(loop)
+    } // end bootstrap
+
+    if (document.readyState === 'complete') {
+      bootstrap()
+    } else {
+      window.addEventListener('load', bootstrap)
+    }
+    return () => {
+      cancelled = true
+      window.removeEventListener('load', bootstrap)
+      cancelAnimationFrame(rafRef.current)
+    }
   }, [initState])
 
   const scoreStr = String(Math.floor(currentScore)).padStart(5, '0')
@@ -722,8 +771,7 @@ export default function DinoGame() {
         {tutorialPhase === 'obstacle' && (
           <div className="tutorial-overlay tutorial-overlay-top">
             <div className="tutorial-step">
-              <div className="tutorial-message">앗! 장애물이 있어요!<br/>화면을 클릭해볼까요?</div>
-              <div className="tutorial-finger">👆</div>
+              <div className="tutorial-message">앗! 장애물이다!<br/>점프 버튼을 눌러보세요!</div>
             </div>
           </div>
         )}
@@ -741,7 +789,6 @@ export default function DinoGame() {
           <div className="tutorial-overlay tutorial-overlay-top">
             <div className="tutorial-step">
               <div className="tutorial-message">새가 날아와요!<br/>엎드려볼까요?</div>
-              <div className="tutorial-finger">👇</div>
             </div>
           </div>
         )}
@@ -766,17 +813,33 @@ export default function DinoGame() {
       </div>
 
       <div className="controls">
-        <button className={`btn-jump${tutorialPhase === 'obstacle' ? ' btn-jump-pulse' : ''}${tutorialPhase === 'ptero' ? ' btn-disabled' : ''}`} onPointerDown={doJump} onContextMenu={e => e.preventDefault()}>
-          <ArrowUp size={80} strokeWidth={2.5} />
-        </button>
-        <button
-          className={`btn-duck${inTutorial && tutorialPhase !== 'ptero' && tutorialPhase !== 'ducking' ? ' btn-disabled' : ''}${tutorialPhase === 'ptero' ? ' btn-duck-pulse' : ''}`}
-          onPointerDown={duckStart} onPointerUp={duckEnd}
-          onPointerLeave={duckEnd} onPointerCancel={duckEnd}
-          onContextMenu={e => e.preventDefault()}
-        >
-          <ArrowDown size={80} strokeWidth={2.5} />
-        </button>
+        <div style={{ position: 'relative' }}>
+          {(tutorialPhase === 'obstacle' || tutorialPhase === 'jumping') && (
+            <div className="tutorial-finger-btn">👇</div>
+          )}
+          <button
+            className={`btn-jump${tutorialPhase === 'obstacle' || tutorialPhase === 'jumping' ? ' btn-jump-pulse' : ''}${tutorialPhase === 'ptero' ? ' btn-disabled' : ''}`}
+            onPointerDown={doJump} onPointerUp={jumpEnd}
+            onPointerLeave={jumpEnd} onPointerCancel={jumpEnd}
+            onContextMenu={e => e.preventDefault()}
+          >
+            <ArrowUp size={80} strokeWidth={2.5} />
+          </button>
+        </div>
+        <div style={{ position: 'relative' }}>
+          {tutorialPhase === 'ptero' && (
+            <div className="tutorial-finger-btn">👇</div>
+          )}
+
+          <button
+            className={`btn-duck${inTutorial && tutorialPhase !== 'ptero' && tutorialPhase !== 'ducking' ? ' btn-disabled' : ''}${tutorialPhase === 'ptero' ? ' btn-duck-pulse' : ''}`}
+            onPointerDown={duckStart} onPointerUp={duckEnd}
+            onPointerLeave={duckEnd} onPointerCancel={duckEnd}
+            onContextMenu={e => e.preventDefault()}
+          >
+            <ArrowDown size={80} strokeWidth={2.5} />
+          </button>
+        </div>
       </div>
     </div>
   )
