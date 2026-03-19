@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { ArrowUp, ArrowDown, RotateCcw } from 'lucide-react'
 import { startGame, finishGame, listenTokenRefresh } from '../api/gameApi'
+import { dlog } from '../lib/debug-log'
+import DebugPanel from './DebugPanel'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const W = 480
@@ -460,6 +462,7 @@ export default function DinoGame() {
       platformRef.current = platform
       userIdRef.current = params.get('user-id')
       gameIdRef.current = params.get('game-id')
+      dlog('Bridge', 'bootstrap', `platform=${platform} userId=${userIdRef.current} gameId=${gameIdRef.current} bridge=${!!window.SeniorBridge} context=${!!window.SeniorContext}`)
       if (platform === 'cocoya') listenTokenRefresh()
 
       if (platform === 'cocoya' && !localStorage.getItem('dino_tutorial_done')) {
@@ -771,6 +774,7 @@ export default function DinoGame() {
 
   return (
     <div className="game-wrapper">
+      <DebugPanel />
       <div className="game-area">
         <canvas ref={canvasRef} className="game-canvas" />
 
