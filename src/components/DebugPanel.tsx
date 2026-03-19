@@ -8,7 +8,7 @@ const TAG_COLORS: Record<DebugEntry['tag'], string> = {
 }
 
 export default function DebugPanel() {
-  if (!import.meta.env.DEV) return null
+  if (import.meta.env.VITE_DEBUG !== 'true') return null
 
   const [entries, setEntries] = useState<DebugEntry[]>(getDebugEntries)
   const [open, setOpen] = useState(false)
