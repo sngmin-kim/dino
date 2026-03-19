@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { ArrowUp, ArrowDown, RotateCcw } from 'lucide-react'
+import { startGame, finishGame, listenTokenRefresh } from '../api/gameApi'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const W = 480
@@ -300,6 +301,11 @@ export default function DinoGame() {
   const [currentScore, setCurrentScore] = useState(0)
   const [nightFactor, setNightFactor] = useState(0)
 
+  const platformRef = useRef<string | null>(null)
+  const userIdRef = useRef<string | null>(null)
+  const gameIdRef = useRef<string | null>(null)
+  const gameHistoryIdRef = useRef<number | null>(null)
+
   const setIsGameOverRef = useRef(setIsGameOver)
   const setCurrentScoreRef = useRef(setCurrentScore)
   const [tutorialPhase, setTutorialPhase] = useState<TutorialPhase>('none')
@@ -350,9 +356,24 @@ export default function DinoGame() {
       next.running = true
       next.started = true
       stateRef.current = next
+      if (platformRef.current === 'cocoya' && userIdRef.current && gameIdRef.current) {
+        gameHistoryIdRef.current = null
+        startGame(userIdRef.current, gameIdRef.current).then(r => {
+          if (r) gameHistoryIdRef.current = r.gameHistoryId
+        })
+      }
       return
     }
-    if (!s.started) { s.running = true; s.started = true; return }
+    if (!s.started) {
+      s.running = true; s.started = true
+      if (platformRef.current === 'cocoya' && userIdRef.current && gameIdRef.current) {
+        gameHistoryIdRef.current = null
+        startGame(userIdRef.current, gameIdRef.current).then(r => {
+          if (r) gameHistoryIdRef.current = r.gameHistoryId
+        })
+      }
+      return
+    }
     if (s.dino.onGround && !s.dino.ducking) {
       s.dino.vy = JUMP_VY
       s.dino.onGround = false
@@ -436,6 +457,10 @@ export default function DinoGame() {
 
       const params = new URLSearchParams(window.location.search)
       const platform = params.get('platform')
+      platformRef.current = platform
+      userIdRef.current = params.get('user-id')
+      gameIdRef.current = params.get('game-id')
+      if (platform === 'cocoya') listenTokenRefresh()
 
       if (platform === 'cocoya' && !localStorage.getItem('dino_tutorial_done')) {
         stateRef.current!.tutorialPhase = 'intro'
@@ -579,6 +604,12 @@ export default function DinoGame() {
           s.speed = INITIAL_SPEED
           s.score = 0
           setTutorialPhaseRef.current('done')
+          if (platformRef.current === 'cocoya' && userIdRef.current && gameIdRef.current) {
+            gameHistoryIdRef.current = null
+            startGame(userIdRef.current, gameIdRef.current).then(r => {
+              if (r) gameHistoryIdRef.current = r.gameHistoryId
+            })
+          }
         }
       }
     }
@@ -649,8 +680,12 @@ export default function DinoGame() {
         if (!dino.dead && collides(getDinoBox(dino), getObsBox(obs))) {
           dino.dead = true; s.running = false; s.gameOver = true
           if (s.score > s.hiScore) s.hiScore = s.score
-          const payload = { type: 'GAME_SCORE', payload: { score: Math.floor(s.score) } }
+          const finalScore = Math.floor(s.score)
+          const payload = { type: 'GAME_SCORE', payload: { score: finalScore } }
           window.parent.postMessage(payload, '*')
+          if (platformRef.current === 'cocoya' && userIdRef.current && gameIdRef.current && gameHistoryIdRef.current != null) {
+            finishGame(userIdRef.current, gameIdRef.current, finalScore, gameHistoryIdRef.current)
+          }
           setIsGameOverRef.current(true)
           setCurrentScoreRef.current(s.score)
           setNightFactorRef.current(s.nightFactor)
