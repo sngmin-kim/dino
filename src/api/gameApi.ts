@@ -32,6 +32,60 @@ declare global {
   }
 }
 
+/** SeniorBridge가 주입될 때까지 폴링 (최대 3초) */
+function waitForBridge(timeout = 3000): Promise<SeniorBridge> {
+  return new Promise((resolve, reject) => {
+    if (window.SeniorBridge) return resolve(window.SeniorBridge)
+    let elapsed = 0
+    const interval = setInterval(() => {
+      elapsed += 50
+      if (window.SeniorBridge) {
+        clearInterval(interval)
+        resolve(window.SeniorBridge)
+      }
+    }, 50)
+    setTimeout(() => {
+      clearInterval(interval)
+      reject(new Error('Bridge timeout'))
+    }, timeout)
+  })
+}
+
+/** APP.READY로 SeniorContext 수신 (0.5초 간격, 최대 5초) */
+export async function requestAppReady(): Promise<SeniorContext | null> {
+  let bridge: SeniorBridge | null = null
+  try {
+    bridge = await waitForBridge()
+  } catch {
+    dlog('Bridge', '브릿지 없음')
+    return null
+  }
+
+  for (let i = 1; i <= 10; i++) {
+    try {
+      dlog('Bridge', `APP.READY 요청 ${i}/10`)
+      const res = await Promise.race([
+        bridge.request<SeniorContext>('APP.READY', {}),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('타임아웃')), 500),
+        ),
+      ])
+      if (res.success && res.data?.token && res.data?.userId) {
+        window.SeniorContext = res.data
+        dlog('Bridge', 'APP.READY 성공', `userId=${res.data.userId} token=${res.data.token.slice(0, 12)}...`)
+        return res.data
+      }
+      dlog('Bridge', 'APP.READY 응답 불완전', JSON.stringify(res))
+    } catch {
+      // 타임아웃 → 다음 재시도
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+
+  dlog('Bridge', 'APP.READY 실패 (5초 대기 완료)')
+  return null
+}
+
 export function listenTokenRefresh() {
   const bridge = window.SeniorBridge
   if (!bridge) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { ArrowUp, ArrowDown, RotateCcw } from 'lucide-react'
-import { startGame, finishGame, listenTokenRefresh } from '../api/gameApi'
+import { startGame, finishGame, listenTokenRefresh, requestAppReady } from '../api/gameApi'
 import { dlog } from '../lib/debug-log'
 import DebugPanel from './DebugPanel'
 
@@ -443,7 +443,7 @@ export default function DinoGame() {
     if (!canvas) return
     let cancelled = false
 
-    function bootstrap() {
+    async function bootstrap() {
       if (cancelled) return
       const gameArea = canvas!.parentElement!
       const cssW = gameArea.clientWidth
@@ -463,7 +463,11 @@ export default function DinoGame() {
       userIdRef.current = params.get('user-id')
       gameIdRef.current = params.get('game-id')
       dlog('Bridge', 'bootstrap', `platform=${platform} userId=${userIdRef.current} gameId=${gameIdRef.current} bridge=${!!window.SeniorBridge} context=${!!window.SeniorContext}`)
-      if (platform === 'cocoya') listenTokenRefresh()
+
+      if (platform === 'cocoya') {
+        await requestAppReady()
+        listenTokenRefresh()
+      }
 
       if (platform === 'cocoya' && !localStorage.getItem('dino_tutorial_done')) {
         stateRef.current!.tutorialPhase = 'intro'
