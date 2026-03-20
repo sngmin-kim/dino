@@ -223,6 +223,18 @@ html, body {
   animation: tutorialBounce 1s ease-in-out infinite;
 }
 
+.tutorial-finger-btn {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 64px;
+  line-height: 1;
+  animation: tutorialBounce 1s ease-in-out infinite;
+  z-index: 10;
+  pointer-events: none;
+}
+
 .tutorial-next-btn {
   pointer-events: auto;
   border: none;
