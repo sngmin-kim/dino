@@ -774,7 +774,7 @@ export default function DinoGame() {
         ctx.fillStyle = th.hint
         ctx.font = '42px Galmuri11'
         ctx.textAlign = 'center'
-        ctx.fillText('↑ 버튼으로 시작', W / 2, GROUND_Y - 70)
+        ctx.fillText('↑ 버튼으로 시작', W / 2, GROUND_Y - 60)
       }
     }
 
