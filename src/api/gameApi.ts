@@ -155,6 +155,18 @@ async function fetchWithAuth(
   return res
 }
 
+/** Amplitude 이벤트 트래킹 (SeniorBridge 경유) */
+export function trackEvent(
+  event: string,
+  properties?: Record<string, unknown>,
+): void {
+  if (!window.SeniorBridge) return
+  window.SeniorBridge.request('ANALYTICS.LOG_EVENT', {
+    event,
+    ...(properties ? { properties } : {}),
+  }).catch(() => {})
+}
+
 export interface PlayResponse {
   gameHistoryId: number
 }
@@ -177,6 +189,12 @@ export async function startGame(userId: string, gameId: string): Promise<PlayRes
     }
     const data = await res.json() as PlayResponse
     dlog('API', 'startGame 성공', `gameHistoryId=${data.gameHistoryId}`)
+    const params = new URLSearchParams(window.location.search)
+    trackEvent('click_start_game', {
+      game_id: gameId,
+      origin: params.get('origin') ?? 'direct',
+      is_first_play: params.get('is-first-play') === 'true',
+    })
     return data
   } catch (e) {
     dlog('API', 'startGame 에러', String(e))
@@ -196,6 +214,10 @@ export async function finishGame(
   }
   const url = `${BASE_URL}/api/v1/users/${userId}/games/${gameId}/finish`
   dlog('API', 'POST finish', `score=${score} historyId=${gameHistoryId}`)
+  trackEvent('click_complete_game', {
+    game_id: gameId,
+    score,
+  })
   try {
     const res = await fetchWithAuth(url, {
       method: 'POST',
