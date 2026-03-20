@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { ArrowUp, ArrowDown, RotateCcw, X } from 'lucide-react'
+import { ArrowUp, ArrowDown, X } from 'lucide-react'
 import { startGame, finishGame, listenTokenRefresh, requestAppReady, waitForBridge } from '../api/gameApi'
 import { dlog } from '../lib/debug-log'
 import DebugPanel from './DebugPanel'
@@ -301,7 +301,7 @@ export default function DinoGame() {
 
   const [isGameOver, setIsGameOver] = useState(false)
   const [currentScore, setCurrentScore] = useState(0)
-  const [nightFactor, setNightFactor] = useState(0)
+  const [, setNightFactor] = useState(0)
 
   const platformRef = useRef<string | null>(null)
   const userIdRef = useRef<string | null>(null)
@@ -312,12 +312,32 @@ export default function DinoGame() {
   const setCurrentScoreRef = useRef(setCurrentScore)
   const [tutorialPhase, setTutorialPhase] = useState<TutorialPhase>('none')
 
+  const [animatedScore, setAnimatedScore] = useState(0)
+
   const setNightFactorRef = useRef(setNightFactor)
   const setTutorialPhaseRef = useRef(setTutorialPhase)
   setIsGameOverRef.current = setIsGameOver
   setCurrentScoreRef.current = setCurrentScore
   setNightFactorRef.current = setNightFactor
   setTutorialPhaseRef.current = setTutorialPhase
+
+  useEffect(() => {
+    if (!isGameOver || currentScore <= 0) { setAnimatedScore(0); return }
+    const target = Math.floor(currentScore)
+    let startTime: number | null = null
+    let rafId: number
+
+    const animate = (timestamp: number) => {
+      if (startTime === null) startTime = timestamp
+      const elapsed = timestamp - startTime
+      const progress = Math.min(elapsed / 1500, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setAnimatedScore(Math.floor(eased * target))
+      if (progress < 1) rafId = requestAnimationFrame(animate)
+    }
+    rafId = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(rafId)
+  }, [isGameOver, currentScore])
 
   const initState = useCallback((): GameState => {
     const prev = stateRef.current
@@ -332,6 +352,20 @@ export default function DinoGame() {
       tutorialPhase: 'none', tutorialTimer: 0,
     }
   }, [])
+
+  const handleRestart = useCallback(() => {
+    setIsGameOver(false)
+    const next = initState()
+    next.running = true
+    next.started = true
+    stateRef.current = next
+    if (platformRef.current === 'cocoya' && userIdRef.current && gameIdRef.current) {
+      gameHistoryIdRef.current = null
+      startGame(userIdRef.current, gameIdRef.current).then(r => {
+        if (r) gameHistoryIdRef.current = r.gameHistoryId
+      })
+    }
+  }, [initState])
 
   const doJump = useCallback(() => {
     const s = stateRef.current
@@ -777,8 +811,6 @@ export default function DinoGame() {
     }
   }, [initState])
 
-  const scoreStr = String(Math.floor(currentScore)).padStart(5, '0')
-  const th = theme(nightFactor)
   const inTutorial = tutorialPhase !== 'none' && tutorialPhase !== 'done'
 
   return (
@@ -788,28 +820,36 @@ export default function DinoGame() {
         onClick={() => history.back()}
         onContextMenu={e => e.preventDefault()}
       >
-        <X size={20} strokeWidth={2.5} />
+        <X size={16} strokeWidth={2.5} />
       </button>
       <DebugPanel />
       <div className="game-area">
         <canvas ref={canvasRef} className="game-canvas" />
 
         {isGameOver && (
-          <div className="gameover-overlay">
-            <div className="gameover-title" style={{ color: th.score }}>게임 오버</div>
-            <div className="gameover-score">
-              {scoreStr.split('').map((ch, i) => (
-                <span key={i} className="score-digit" style={{ color: th.score }}>{ch}</span>
-              ))}
+          <div className="gameover-modal-dim">
+            <div className="gameover-modal">
+              <div className="gameover-modal-title">게임 오버</div>
+              <div className="gameover-modal-score">
+                🎉 {animatedScore.toLocaleString()}점
+              </div>
+              <div className="gameover-modal-buttons">
+                <button
+                  className="gameover-btn-cancel"
+                  onClick={() => history.back()}
+                  onContextMenu={e => e.preventDefault()}
+                >
+                  나가기
+                </button>
+                <button
+                  className="gameover-btn-confirm"
+                  onClick={handleRestart}
+                  onContextMenu={e => e.preventDefault()}
+                >
+                  다시하기
+                </button>
+              </div>
             </div>
-            <button
-              className="btn-restart"
-              onPointerDown={doJump}
-              onContextMenu={e => e.preventDefault()}
-              style={{ background: th.score, color: th.bg }}
-            >
-              <RotateCcw size={52} strokeWidth={2.5} />
-            </button>
           </div>
         )}
 

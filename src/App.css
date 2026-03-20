@@ -81,64 +81,89 @@ html, body {
   transform: scale(0.94);
 }
 
-/* ── 게임오버 오버레이 ── */
-.gameover-overlay {
-  position: absolute;
-  top: 5vh;
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none;
-  z-index: 20;
-  /* 컨트롤 버튼 영역(60vh) 넘지 않도록 */
-  max-height: 53vh;
-  overflow: hidden;
-}
-
-.gameover-title {
-  font-family: 'Galmuri11', monospace;
-  font-size: 44px;
-  font-weight: bold;
-  line-height: 1;
-}
-
-.gameover-score {
-  display: flex;
-  flex-direction: row;
-}
-
-.score-digit {
-  font-family: 'Galmuri11', monospace;
-  font-size: 60px;
-  font-weight: bold;
-  line-height: 1;
-  display: inline-block;
-  width: 0.62em;
-  text-align: center;
-}
-
-.btn-restart {
-  pointer-events: auto;
-  border: none;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
+/* ── 게임오버 모달 ── */
+.gameover-modal-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  width: 100px;
-  height: 100px;
-  transition: transform 0.06s;
-  user-select: none;
-  -webkit-user-select: none;
+  padding: 0 24px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
-.btn-restart:active {
-  transform: scale(0.94);
+.gameover-modal {
+  display: flex;
+  width: 100%;
+  max-width: 320px;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border-radius: 20px;
+  background: #fff;
+  padding: 16px;
+}
+
+.gameover-modal-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #111;
+  line-height: 1;
+}
+
+.gameover-modal-score {
+  font-size: 30px;
+  font-weight: 800;
+  color: #111;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gameover-modal-buttons {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.gameover-btn-cancel,
+.gameover-btn-confirm {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 0;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.06s;
+}
+
+.gameover-btn-cancel {
+  background: #e5e7eb;
+  color: #111;
+}
+
+.gameover-btn-cancel:active {
+  background: #d1d5db;
+}
+
+.gameover-btn-confirm {
+  background: #f97316;
+  color: #fff;
+}
+
+.gameover-btn-confirm:active {
+  background: #9a3412;
 }
 
 /* ── 튜토리얼 오버레이 ── */
@@ -268,13 +293,13 @@ html, body {
   position: fixed;
   top: 12px;
   right: 12px;
-  z-index: 50;
+  z-index: 100;
   width: 36px;
   height: 36px;
   border: none;
   border-radius: 50%;
-  background: rgba(30, 30, 30, 0.6);
-  color: #ccc;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
